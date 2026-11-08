@@ -13,7 +13,6 @@ canvas.addEventListener('pointermove', (event) => {
 });
 canvas.addEventListener('pointerdown', (event) => {
   network.setPointer(event.offsetX, event.offsetY);
-  network.emitShockwave(event.offsetX, event.offsetY);
 });
 canvas.addEventListener('pointerleave', () => network.clearPointer());
 canvas.addEventListener('pointercancel', () => network.clearPointer());

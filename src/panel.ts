@@ -100,21 +100,6 @@ export function createPanel(settings: Settings, network: ParticleNetwork) {
     label: 'cursor triangles',
   });
 
-  const shockwave = pane.addFolder({ title: 'Click shockwave' });
-  shockwave.addBinding(settings, 'shockwave', { label: 'on' });
-  shockwave.addBinding(settings, 'shockwaveStrength', {
-    ...RANGES.shockwaveStrength,
-    label: 'strength',
-  });
-  shockwave.addBinding(settings, 'shockwaveReach', {
-    ...RANGES.shockwaveReach,
-    label: 'reach',
-  });
-  shockwave.addBinding(settings, 'shockwaveSpeed', {
-    ...RANGES.shockwaveSpeed,
-    label: 'speed px/s',
-  });
-
   const flashlight = pane.addFolder({ title: 'Flashlight' });
   flashlight.addBinding(settings, 'flashlight', { label: 'on' });
   flashlight.addBinding(settings, 'flashlightRadius', {
