@@ -1,14 +1,14 @@
 import Delaunator from 'delaunator';
-import { FPS, type Settings } from './settings';
-import { Point } from './point';
+import { REFERENCE_FPS, type Settings } from './settings';
+import { Particle } from './particle';
 
-const TIME_PER_FRAME = 1000 / FPS;
+const FRAME_MS = 1000 / REFERENCE_FPS;
 const ALPHA_LEVELS = 32;
 // Push velocity keeps this share per reference frame, settling in about a second
 const PUSH_DECAY = 0.95;
-// Inward pull mixed into the vortex swirl so points orbit instead of flying off
+// Inward pull mixed into the vortex swirl so particles orbit instead of flying off
 const VORTEX_PULL = 0.35;
-// Cells are as wide as the connect distance, so connected points share a cell
+// Cells are as wide as the link distance, so linked particles share a cell
 // or touch. Only half the neighbors are listed so each cell pair is visited once.
 const NEIGHBORS = [
   [1, 0],
@@ -22,33 +22,33 @@ function wrap(value: number, size: number, margin: number) {
   return ((((value + margin) % span) + span) % span) - margin;
 }
 
-// Float rounding in wrap() can land a point just outside the grid
+// Float rounding in wrap() can land a particle just outside the grid
 function cellIndex(value: number, count: number, cellSize: number) {
   const index = Math.floor(value / cellSize) + 1;
   return Math.min(count - 1, Math.max(0, index));
 }
 
-function levelAt(distance: number, maxDistance: number, fade: number) {
+function levelAt(distance: number, maxDistance: number, falloff: number) {
   if (distance >= maxDistance) {
     return 0;
   }
-  return Math.round((1 - distance / maxDistance) ** fade * ALPHA_LEVELS);
+  return Math.round((1 - distance / maxDistance) ** falloff * ALPHA_LEVELS);
 }
 
-function connectionLevel(
-  point: Point,
-  other: Point,
+function linkLevel(
+  particle: Particle,
+  other: Particle,
   maxDistance: number,
-  fade: number,
+  falloff: number,
 ) {
-  return levelAt(point.distance(other), maxDistance, fade);
+  return levelAt(particle.distance(other), maxDistance, falloff);
 }
 
 interface Shockwave {
   x: number;
   y: number;
   radius: number;
-  hit: Set<Point>;
+  hit: Set<Particle>;
 }
 
 interface TriangleFade {
@@ -68,22 +68,22 @@ type TriangleVisitor = (
   ac: number,
 ) => void;
 
-// Point indices stay below 2^17, so a triangle's three pack exactly into a key
+// Particle indices stay below 2^17, so a triangle's three pack exactly into a key
 const INDEX_LIMIT = 2 ** 17;
-// Stands in for the pointer as a triangle vertex; no point index reaches it
-const CURSOR = INDEX_LIMIT - 1;
+// Stands in for the pointer as a triangle vertex; no particle index reaches it
+const POINTER_INDEX = INDEX_LIMIT - 1;
 
-interface CursorLink {
+interface PointerLink {
   index: number;
   level: number;
 }
 
-export class Simulator {
+export class ParticleNetwork {
   private ctx: CanvasRenderingContext2D;
-  private points: Point[] = [];
+  private particles: Particle[] = [];
   private cells: number[][] = [];
-  // links[a] holds [b, level, b, level, ...] for each connection to a later b
-  private links: number[][] = [];
+  // adjacency[a] holds [b, level, b, level, ...] for each link to a later b
+  private adjacency: number[][] = [];
   private fades = new Map<number, TriangleFade>();
   private coords = new Float64Array(0);
   private delaunay?: Delaunator<Float64Array>;
@@ -96,7 +96,7 @@ export class Simulator {
   private width = 0;
   private height = 0;
   private dpr = 0;
-  private connectDistance = 0;
+  private linkDistance = 0;
   private density = 0;
   private background: CanvasGradient | string = 'black';
   private backgroundKey = '';
@@ -120,14 +120,14 @@ export class Simulator {
     this.pointer = null;
   }
 
-  public shockwave(x: number, y: number) {
+  public emitShockwave(x: number, y: number) {
     if (this.settings.shockwave) {
       this.waves.push({ x, y, radius: 0, hit: new Set() });
     }
   }
 
   public randomize() {
-    this.points.length = 0;
+    this.particles.length = 0;
     this.fades.clear();
     this.populate();
   }
@@ -136,12 +136,12 @@ export class Simulator {
     const width = this.canvas.clientWidth;
     const height = this.canvas.clientHeight;
     const dpr = window.devicePixelRatio;
-    const { connectDistance, density } = this.settings;
+    const { linkDistance, density } = this.settings;
     const resized =
       width !== this.width || height !== this.height || dpr !== this.dpr;
     if (
       !resized &&
-      connectDistance === this.connectDistance &&
+      linkDistance === this.linkDistance &&
       density === this.density
     ) {
       return;
@@ -153,49 +153,49 @@ export class Simulator {
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
-    const oldMargin = this.connectDistance;
-    const margin = connectDistance;
+    const oldMargin = this.linkDistance;
+    const margin = linkDistance;
     const scaleX = (width + 2 * margin) / (this.width + 2 * oldMargin);
     const scaleY = (height + 2 * margin) / (this.height + 2 * oldMargin);
-    this.points.forEach((point) => {
-      point.x = (point.x + oldMargin) * scaleX - margin;
-      point.y = (point.y + oldMargin) * scaleY - margin;
+    this.particles.forEach((particle) => {
+      particle.x = (particle.x + oldMargin) * scaleX - margin;
+      particle.y = (particle.y + oldMargin) * scaleY - margin;
     });
 
     this.width = width;
     this.height = height;
     this.dpr = dpr;
-    this.connectDistance = connectDistance;
+    this.linkDistance = linkDistance;
     this.density = density;
 
-    this.cols = Math.ceil((width + 2 * margin) / connectDistance);
-    this.rows = Math.ceil((height + 2 * margin) / connectDistance);
+    this.cols = Math.ceil((width + 2 * margin) / linkDistance);
+    this.rows = Math.ceil((height + 2 * margin) / linkDistance);
     this.cells = Array.from({ length: this.cols * this.rows }, () => []);
 
     this.populate();
   }
 
   private populate() {
-    const { width, height, connectDistance: margin, density } = this;
+    const { width, height, linkDistance: margin, density } = this;
     const population = Math.round(
       ((width + 2 * margin) * (height + 2 * margin)) / (5000 / density),
     );
-    this.points.length = Math.min(this.points.length, population);
-    while (this.points.length < population) {
-      this.points.push(
-        Point.create(-margin, -margin, width + margin, height + margin),
+    this.particles.length = Math.min(this.particles.length, population);
+    while (this.particles.length < population) {
+      this.particles.push(
+        Particle.create(-margin, -margin, width + margin, height + margin),
       );
     }
   }
 
   private loop = (timestamp: number) => {
-    const delta = !this.last ? 1 : (timestamp - this.last) / TIME_PER_FRAME;
+    const delta = !this.last ? 1 : (timestamp - this.last) / FRAME_MS;
     const { ctx, settings } = this;
 
     this.fit();
 
     ctx.globalCompositeOperation = 'source-over';
-    // Connections and points leave globalAlpha below 1
+    // Links and particles leave globalAlpha below 1
     ctx.globalAlpha = 1;
     this.drawBackground();
 
@@ -207,18 +207,18 @@ export class Simulator {
 
       const step = delta * settings.maxSpeed;
       const pushDecay = PUSH_DECAY ** pushDelta;
-      this.points.forEach((point) => {
-        point.move(step, pushDelta, pushDecay);
-        point.x = wrap(point.x, this.width, this.connectDistance);
-        point.y = wrap(point.y, this.height, this.connectDistance);
+      this.particles.forEach((particle) => {
+        particle.move(step, pushDelta, pushDecay);
+        particle.x = wrap(particle.x, this.width, this.linkDistance);
+        particle.y = wrap(particle.y, this.height, this.linkDistance);
       });
     }
 
     ctx.globalCompositeOperation = settings.additive
       ? 'lighter'
       : 'source-over';
-    this.drawConnections(delta);
-    this.drawPoints();
+    this.drawLinks(delta);
+    this.drawParticles();
     this.drawShockwaves();
 
     this.last = timestamp;
@@ -228,55 +228,55 @@ export class Simulator {
 
   private applyPointerForce(delta: number) {
     const { pointer } = this;
-    const { mouseMode, mouseRadius, mouseStrength } = this.settings;
-    if (!pointer || mouseMode === 'off') {
+    const { pointerForce, forceRadius, forceStrength } = this.settings;
+    if (!pointer || pointerForce === 'off') {
       return;
     }
 
-    this.points.forEach((point) => {
-      const dx = pointer.x - point.x;
-      const dy = pointer.y - point.y;
+    this.particles.forEach((particle) => {
+      const dx = pointer.x - particle.x;
+      const dy = pointer.y - particle.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      if (distance >= mouseRadius || distance < 1) {
+      if (distance >= forceRadius || distance < 1) {
         return;
       }
 
       // Scaled by 1 / distance so dx and dy act as a unit direction
       const force =
-        (mouseStrength * (1 - distance / mouseRadius) ** 2 * delta) / distance;
-      if (mouseMode === 'attract') {
-        point.pushX += dx * force;
-        point.pushY += dy * force;
-      } else if (mouseMode === 'repel') {
-        point.pushX -= dx * force;
-        point.pushY -= dy * force;
+        (forceStrength * (1 - distance / forceRadius) ** 2 * delta) / distance;
+      if (pointerForce === 'attract') {
+        particle.pushX += dx * force;
+        particle.pushY += dy * force;
+      } else if (pointerForce === 'repel') {
+        particle.pushX -= dx * force;
+        particle.pushY -= dy * force;
       } else {
-        point.pushX += (-dy + dx * VORTEX_PULL) * force;
-        point.pushY += (dx + dy * VORTEX_PULL) * force;
+        particle.pushX += (-dy + dx * VORTEX_PULL) * force;
+        particle.pushY += (dx + dy * VORTEX_PULL) * force;
       }
     });
   }
 
-  // Each wave kicks a point once, when its ring first covers it. Tracking hits
-  // matters because a kicked point can move ahead of the ring into its next band.
+  // Each wave kicks a particle once, when its ring first covers it. Tracking hits
+  // matters because a kicked particle can move ahead of the ring into its next band.
   private updateShockwaves(delta: number) {
     const { shockwaveReach, shockwaveSpeed, shockwaveStrength } = this.settings;
 
     this.waves = this.waves.filter((wave) => {
       const to = Math.min(
         shockwaveReach,
-        wave.radius + (shockwaveSpeed * delta * TIME_PER_FRAME) / 1000,
+        wave.radius + (shockwaveSpeed * delta * FRAME_MS) / 1000,
       );
       const kick = shockwaveStrength * (1 - to / shockwaveReach);
 
-      this.points.forEach((point) => {
-        const dx = point.x - wave.x;
-        const dy = point.y - wave.y;
+      this.particles.forEach((particle) => {
+        const dx = particle.x - wave.x;
+        const dy = particle.y - wave.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance < to && distance > 0 && !wave.hit.has(point)) {
-          wave.hit.add(point);
-          point.pushX += (dx / distance) * kick;
-          point.pushY += (dy / distance) * kick;
+        if (distance < to && distance > 0 && !wave.hit.has(particle)) {
+          wave.hit.add(particle);
+          particle.pushX += (dx / distance) * kick;
+          particle.pushY += (dy / distance) * kick;
         }
       });
 
@@ -285,8 +285,8 @@ export class Simulator {
     });
   }
 
-  // Multiplier for line and triangle opacity around the cursor
-  private flashlight(x: number, y: number) {
+  // Multiplier for line and triangle opacity around the pointer
+  private flashlightBoostAt(x: number, y: number) {
     const { pointer } = this;
     const { flashlight, flashlightRadius, flashlightBoost } = this.settings;
     if (!pointer || !flashlight) {
@@ -339,49 +339,49 @@ export class Simulator {
     ctx.fillRect(0, 0, width, height);
   }
 
-  private drawPoints() {
+  private drawParticles() {
     const { ctx } = this;
-    const { minRadius, maxRadius, pointColor } = this.settings;
+    const { minRadius, maxRadius, particleColor } = this.settings;
     const largest = Math.max(minRadius, maxRadius);
 
-    ctx.fillStyle = pointColor;
-    this.points.forEach((point) => {
-      const radius = minRadius + point.size * (maxRadius - minRadius);
+    ctx.fillStyle = particleColor;
+    this.particles.forEach((particle) => {
+      const radius = minRadius + particle.size * (maxRadius - minRadius);
       ctx.globalAlpha = radius / largest;
       ctx.beginPath();
-      ctx.arc(point.x, point.y, radius, 0, 2 * Math.PI);
+      ctx.arc(particle.x, particle.y, radius, 0, 2 * Math.PI);
       ctx.fill();
     });
   }
 
-  private drawConnections(delta: number) {
-    const { ctx, cells, cols, rows, connectDistance, points, links } = this;
+  private drawLinks(delta: number) {
+    const { ctx, cells, cols, rows, linkDistance, particles, adjacency } = this;
     const {
-      fade,
+      falloff,
       lineColor,
       lineWidth,
       triangles,
       triangleStyle,
-      cursorLinks,
-      cursorTriangles,
+      pointerLinks,
+      pointerTriangles,
     } = this.settings;
-    const recordLinks = triangles && triangleStyle === 'overlapping';
+    const recordAdjacency = triangles && triangleStyle === 'overlapping';
 
     cells.forEach((cell) => {
       cell.length = 0;
     });
-    points.forEach((point, index) => {
-      const row = cellIndex(point.y, rows, connectDistance);
-      const col = cellIndex(point.x, cols, connectDistance);
+    particles.forEach((particle, index) => {
+      const row = cellIndex(particle.y, rows, linkDistance);
+      const col = cellIndex(particle.x, cols, linkDistance);
       cells[row * cols + col].push(index);
     });
 
-    if (recordLinks) {
-      while (links.length < points.length) {
-        links.push([]);
+    if (recordAdjacency) {
+      while (adjacency.length < particles.length) {
+        adjacency.push([]);
       }
-      links.forEach((link) => {
-        link.length = 0;
+      adjacency.forEach((adjacent) => {
+        adjacent.length = 0;
       });
     }
 
@@ -394,20 +394,20 @@ export class Simulator {
       level: number,
     ) => {
       const lit = Math.round(
-        level * this.flashlight((ax + bx) / 2, (ay + by) / 2),
+        level * this.flashlightBoostAt((ax + bx) / 2, (ay + by) / 2),
       );
       const path = paths[Math.min(ALPHA_LEVELS, lit)];
       path.moveTo(ax, ay);
       path.lineTo(bx, by);
     };
-    const connect = (a: number, b: number) => {
-      const point = points[a];
-      const other = points[b];
-      const level = connectionLevel(point, other, connectDistance, fade);
+    const link = (a: number, b: number) => {
+      const particle = particles[a];
+      const other = particles[b];
+      const level = linkLevel(particle, other, linkDistance, falloff);
       if (level > 0) {
-        addLine(point.x, point.y, other.x, other.y, level);
-        if (recordLinks) {
-          links[Math.min(a, b)].push(Math.max(a, b), level);
+        addLine(particle.x, particle.y, other.x, other.y, level);
+        if (recordAdjacency) {
+          adjacency[Math.min(a, b)].push(Math.max(a, b), level);
         }
       }
     };
@@ -418,7 +418,7 @@ export class Simulator {
 
         for (let i = 0; i < cell.length; i++) {
           for (let j = i + 1; j < cell.length; j++) {
-            connect(cell[i], cell[j]);
+            link(cell[i], cell[j]);
           }
         }
 
@@ -431,7 +431,7 @@ export class Simulator {
 
           for (const a of cell) {
             for (const b of cells[r * cols + c]) {
-              connect(a, b);
+              link(a, b);
             }
           }
         }
@@ -439,20 +439,24 @@ export class Simulator {
     }
 
     const { pointer } = this;
-    const linked: CursorLink[] = [];
-    if (pointer && (cursorLinks || cursorTriangles)) {
-      points.forEach((point, index) => {
-        const level = levelAt(point.distance(pointer), connectDistance, fade);
+    const linked: PointerLink[] = [];
+    if (pointer && (pointerLinks || pointerTriangles)) {
+      particles.forEach((particle, index) => {
+        const level = levelAt(
+          particle.distance(pointer),
+          linkDistance,
+          falloff,
+        );
         if (level > 0) {
           linked.push({ index, level });
-          if (cursorLinks) {
-            addLine(pointer.x, pointer.y, point.x, point.y, level);
+          if (pointerLinks) {
+            addLine(pointer.x, pointer.y, particle.x, particle.y, level);
           }
         }
       });
     }
 
-    if (triangles || (pointer && cursorTriangles)) {
+    if (triangles || (pointer && pointerTriangles)) {
       this.fillTriangles(delta, linked);
     } else {
       this.fades.clear();
@@ -466,11 +470,11 @@ export class Simulator {
     }
   }
 
-  private fillTriangles(delta: number, linked: CursorLink[]) {
-    const { ctx, points, fades, pointer } = this;
+  private fillTriangles(delta: number, linked: PointerLink[]) {
+    const { ctx, particles, fades, pointer } = this;
     const {
       triangles,
-      cursorTriangles,
+      pointerTriangles,
       triangleColor,
       triangleOpacity,
       triangleShade,
@@ -481,7 +485,7 @@ export class Simulator {
     // Exponential easing that covers about 95% of the way in triangleTransition ms
     const ease =
       triangleTransition > 0
-        ? 1 - Math.exp((-3 * delta * TIME_PER_FRAME) / triangleTransition)
+        ? 1 - Math.exp((-3 * delta * FRAME_MS) / triangleTransition)
         : 1;
 
     const show: TriangleVisitor = (a, b, c, ab, bc, ac) => {
@@ -501,18 +505,18 @@ export class Simulator {
     } else if (triangles) {
       this.findOverlappingTriangles(show);
     }
-    if (pointer && cursorTriangles) {
-      this.findCursorTriangles(pointer, linked, show);
+    if (pointer && pointerTriangles) {
+      this.findPointerTriangles(pointer, linked, show);
     }
 
-    const maxEdge = 2 * this.connectDistance;
+    const maxEdge = 2 * this.linkDistance;
     ctx.fillStyle = triangleColor;
     // One fill per triangle, so overlaps always add up the same way
     fades.forEach((fade, key) => {
-      const p = points[fade.a];
-      const q = points[fade.b];
-      const r = fade.c === CURSOR ? pointer : points[fade.c];
-      // A resize removed one of its points, or the pointer left the canvas
+      const p = particles[fade.a];
+      const q = particles[fade.b];
+      const r = fade.c === POINTER_INDEX ? pointer : particles[fade.c];
+      // A resize removed one of its particles, or the pointer left the canvas
       if (!q || !r) {
         fades.delete(key);
         return;
@@ -532,7 +536,10 @@ export class Simulator {
         }
       }
 
-      const lit = this.flashlight((p.x + q.x + r.x) / 3, (p.y + q.y + r.y) / 3);
+      const lit = this.flashlightBoostAt(
+        (p.x + q.x + r.x) / 3,
+        (p.y + q.y + r.y) / 3,
+      );
       ctx.globalAlpha = Math.min(1, fade.opacity * triangleOpacity * lit);
       ctx.beginPath();
       ctx.moveTo(p.x, p.y);
@@ -542,26 +549,26 @@ export class Simulator {
     });
   }
 
-  // The cursor plus two linked points that are connected to each other. The
+  // The pointer plus two particles linked to it and to each other. The
   // mosaic style keeps only neighbors by angle, a fan that never overlaps.
-  private findCursorTriangles(
+  private findPointerTriangles(
     pointer: { x: number; y: number },
-    linked: CursorLink[],
+    linked: PointerLink[],
     show: TriangleVisitor,
   ) {
-    const { points, connectDistance } = this;
-    const { fade, triangleStyle } = this.settings;
+    const { particles, linkDistance } = this;
+    const { falloff, triangleStyle } = this.settings;
 
-    const visit = (u: CursorLink, v: CursorLink) => {
+    const visit = (u: PointerLink, v: PointerLink) => {
       const [a, b] = u.index < v.index ? [u, v] : [v, u];
-      const ab = connectionLevel(
-        points[a.index],
-        points[b.index],
-        connectDistance,
-        fade,
+      const ab = linkLevel(
+        particles[a.index],
+        particles[b.index],
+        linkDistance,
+        falloff,
       );
       if (ab > 0) {
-        show(a.index, b.index, CURSOR, ab, b.level, a.level);
+        show(a.index, b.index, POINTER_INDEX, ab, b.level, a.level);
       }
     };
 
@@ -576,61 +583,64 @@ export class Simulator {
 
     const fan = linked
       .map((link) => {
-        const point = points[link.index];
-        const angle = Math.atan2(point.y - pointer.y, point.x - pointer.x);
+        const particle = particles[link.index];
+        const angle = Math.atan2(
+          particle.y - pointer.y,
+          particle.x - pointer.x,
+        );
         return { link, angle };
       })
       .sort((u, v) => u.angle - v.angle);
-    // With two points the wrap-around pair would repeat the only pair
+    // With two particles the wrap-around pair would repeat the only pair
     const pairs = fan.length > 2 ? fan.length : fan.length - 1;
     for (let k = 0; k < pairs; k++) {
       const u = fan[k];
       const v = fan[(k + 1) % fan.length];
       const gap = (v.angle - u.angle + 2 * Math.PI) % (2 * Math.PI);
-      // A wider gap would cover the far side of the cursor and overlap the fan
+      // A wider gap would cover the far side of the pointer and overlap the fan
       if (gap < Math.PI) {
         visit(u.link, v.link);
       }
     }
   }
 
-  // Every mutually connected triple, found once from its lowest index a via b < c
+  // Every mutually linked triple, found once from its lowest index a via b < c
   private findOverlappingTriangles(show: TriangleVisitor) {
-    const { points, links } = this;
+    const { particles, adjacency } = this;
 
-    for (let a = 0; a < points.length; a++) {
-      const linksA = links[a];
-      for (let i = 0; i < linksA.length; i += 2) {
-        const b = linksA[i];
-        const linksB = links[b];
-        for (let j = 0; j < linksB.length; j += 2) {
-          const c = linksB[j];
+    for (let a = 0; a < particles.length; a++) {
+      const adjacentA = adjacency[a];
+      for (let i = 0; i < adjacentA.length; i += 2) {
+        const b = adjacentA[i];
+        const adjacentB = adjacency[b];
+        for (let j = 0; j < adjacentB.length; j += 2) {
+          const c = adjacentB[j];
           let k = 0;
-          while (k < linksA.length && linksA[k] !== c) {
+          while (k < adjacentA.length && adjacentA[k] !== c) {
             k += 2;
           }
-          if (k < linksA.length) {
-            show(a, b, c, linksA[i + 1], linksB[j + 1], linksA[k + 1]);
+          if (k < adjacentA.length) {
+            show(a, b, c, adjacentA[i + 1], adjacentB[j + 1], adjacentA[k + 1]);
           }
         }
       }
     }
   }
 
-  // Delaunay triangles whose edges are all connections. They never overlap and
-  // number at most two per point, however dense the graph gets.
+  // Delaunay triangles whose edges are all links. They never overlap and
+  // number at most two per particle, however dense the graph gets.
   private findMosaicTriangles(show: TriangleVisitor) {
-    const { points, connectDistance } = this;
-    const { fade } = this.settings;
+    const { particles, linkDistance } = this;
+    const { falloff } = this.settings;
 
-    if (this.coords.length !== 2 * points.length) {
-      this.coords = new Float64Array(2 * points.length);
+    if (this.coords.length !== 2 * particles.length) {
+      this.coords = new Float64Array(2 * particles.length);
       this.delaunay = undefined;
     }
     const coords = this.coords;
-    points.forEach((point, i) => {
-      coords[2 * i] = point.x;
-      coords[2 * i + 1] = point.y;
+    particles.forEach((particle, i) => {
+      coords[2 * i] = particle.x;
+      coords[2 * i + 1] = particle.y;
     });
     if (this.delaunay) {
       this.delaunay.update();
@@ -647,9 +657,9 @@ export class Simulator {
       if (b > c) [b, c] = [c, b];
       if (a > b) [a, b] = [b, a];
 
-      const ab = connectionLevel(points[a], points[b], connectDistance, fade);
-      const bc = connectionLevel(points[b], points[c], connectDistance, fade);
-      const ac = connectionLevel(points[a], points[c], connectDistance, fade);
+      const ab = linkLevel(particles[a], particles[b], linkDistance, falloff);
+      const bc = linkLevel(particles[b], particles[c], linkDistance, falloff);
+      const ac = linkLevel(particles[a], particles[c], linkDistance, falloff);
       if (ab > 0 && bc > 0 && ac > 0) {
         show(a, b, c, ab, bc, ac);
       }
