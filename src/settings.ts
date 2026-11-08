@@ -36,6 +36,7 @@ export const DEFAULT_SETTINGS = {
   flashlight: true,
   flashlightRadius: 200,
   flashlightBoost: 3,
+  background: true,
   backgroundInner: '#0b1226',
   backgroundOuter: '#000000',
 };
@@ -75,16 +76,15 @@ const BOOLEAN_KEYS = [
   'pointerTriangles',
   'spawnOnClick',
   'flashlight',
+  'background',
 ] as const;
 
-const STORAGE_KEY = 'particle-network-settings';
-
-export function loadSettings(): Settings {
-  const settings = { ...DEFAULT_SETTINGS };
+export function loadSettings(key: string): Partial<Settings> {
+  const settings: Partial<Settings> = {};
 
   let stored: unknown;
   try {
-    stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}');
+    stored = JSON.parse(localStorage.getItem(key) ?? '{}');
   } catch {
     return settings;
   }
@@ -128,17 +128,17 @@ export function loadSettings(): Settings {
   return settings;
 }
 
-export function saveSettings(settings: Settings) {
-  // Only changed values are saved so new defaults still reach returning
-  // visitors, and paused never is so a reload always starts animating
+export function saveSettings(key: string, settings: Settings, base: Settings) {
+  // Only values that differ from the configured ones are saved, so later
+  // changes to those still reach returning visitors. Paused never is.
   const changed = Object.fromEntries(
     Object.entries(settings).filter(
-      ([key, value]) =>
-        key !== 'paused' && value !== DEFAULT_SETTINGS[key as keyof Settings],
+      ([name, value]) =>
+        name !== 'paused' && value !== base[name as keyof Settings],
     ),
   );
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(changed));
+    localStorage.setItem(key, JSON.stringify(changed));
   } catch {
     // Storage can be disabled or full; settings then last until reload
   }
