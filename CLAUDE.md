@@ -13,7 +13,7 @@ The package manager is pnpm (`pnpm-lock.yaml`). The repo is both the npm package
 - **Format:** `pnpm dlx prettier --write src demo` (Prettier isn't a devDependency; `.prettierrc` sets single quotes and trailing commas)
 - **Package checks:** `pnpm dlx publint` and `pnpm dlx @arethetypeswrong/cli --pack . --profile esm-only` check that the exports and types resolve for consumers.
 
-No test runner or linter is configured, so the builds and the package checks are the only automated checks. Publishing is manual: `pnpm publish` from a clean `main` after bumping `version`. `publishConfig` pins the public npm registry, because a machine-wide registry setting would otherwise receive the package.
+No test runner or linter is configured, so the builds and the package checks are the only automated checks. Publishing is automatic: a push to `main` that changes `package.json` runs `.github/workflows/publish.yml`, which publishes the `version` unless npm already has it. So a release is a merged `version` bump. The workflow authenticates through npm trusted publishing, configured on npmjs.com for that file name, so no npm token is stored anywhere. `publishConfig` pins the public npm registry, because a machine-wide registry setting would otherwise receive the package.
 
 ## Architecture
 
