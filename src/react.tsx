@@ -2,10 +2,12 @@
 
 import {
   useEffect,
+  useId,
   useImperativeHandle,
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
   type Ref,
 } from 'react';
 import { ParticleNetwork } from './particle-network.js';
@@ -116,4 +118,146 @@ export function ParticleNetworkPanel({
   }, [network]);
 
   return <div ref={container} className={className} style={style} />;
+}
+
+// A shortcut typed into a field is text, not a command. Checkboxes and
+// buttons keep focus after a click but take no text, so they don't count.
+function isTextEntry(target: EventTarget | null) {
+  return (
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLInputElement &&
+      !['checkbox', 'radio', 'button', 'range', 'color'].includes(
+        target.type,
+      )) ||
+    (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+const BUTTON_STYLE: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 32,
+  height: 32,
+  padding: 0,
+  border: 'none',
+  borderRadius: '50%',
+  background: 'transparent',
+  color: 'inherit',
+  cursor: 'pointer',
+};
+
+const SLIDERS_ICON = (
+  <svg
+    viewBox="0 0 24 24"
+    width="18"
+    height="18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    aria-hidden
+  >
+    <path d="M4 6h16M4 12h16M4 18h16" />
+    <circle cx="9" cy="6" r="2" fill="currentColor" />
+    <circle cx="15" cy="12" r="2" fill="currentColor" />
+    <circle cx="7" cy="18" r="2" fill="currentColor" />
+  </svg>
+);
+
+export interface ParticleNetworkSettingsProps {
+  /** The network to control. The button shows right away; the panel opens once the network exists. */
+  network: ParticleNetwork | null;
+  /** Key that toggles the panel, compared with `KeyboardEvent.key` ignoring case. `null` turns it off. */
+  shortcut?: string | null;
+  /** Where the panel opens relative to the button. */
+  placement?: 'above' | 'below';
+  /** Accessible name and tooltip of the button. */
+  label?: string;
+  /** Positions the button, with the panel anchored to it. */
+  className?: string;
+  style?: CSSProperties;
+  /** Styles the button instead of the built-in inline styles. */
+  buttonClassName?: string;
+  /** The button's content. Defaults to a sliders icon. */
+  children?: ReactNode;
+}
+
+/** A button that opens the settings panel, with a keyboard shortcut and Escape to close. */
+export function ParticleNetworkSettings({
+  network,
+  shortcut = 'h',
+  placement = 'above',
+  label = 'Animation settings',
+  className,
+  style,
+  buttonClassName,
+  children = SLIDERS_ICON,
+}: ParticleNetworkSettingsProps) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+        return;
+      }
+      if (
+        !shortcut ||
+        event.key.toLowerCase() !== shortcut.toLowerCase() ||
+        event.repeat ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isTextEntry(event.target)
+      ) {
+        return;
+      }
+      setOpen((current) => !current);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [shortcut]);
+
+  return (
+    <div className={className} style={style}>
+      <div style={{ position: 'relative' }}>
+        <button
+          type="button"
+          aria-label={label}
+          title={shortcut ? `${label} (${shortcut.toUpperCase()})` : label}
+          aria-keyshortcuts={shortcut ?? undefined}
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={() => setOpen((current) => !current)}
+          className={buttonClassName}
+          style={
+            buttonClassName
+              ? undefined
+              : { ...BUTTON_STYLE, opacity: open ? 1 : 0.6 }
+          }
+        >
+          {children}
+        </button>
+        {open && network && (
+          <div
+            id={panelId}
+            style={{
+              position: 'absolute',
+              right: 0,
+              [placement === 'above' ? 'bottom' : 'top']: 'calc(100% + 8px)',
+              zIndex: 10,
+              width: 280,
+              maxHeight: '60vh',
+              overflowY: 'auto',
+            }}
+          >
+            <ParticleNetworkPanel network={network} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
