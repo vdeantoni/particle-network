@@ -32,6 +32,7 @@ export const DEFAULT_SETTINGS = {
   forceStrength: 0.1,
   pointerLinks: true,
   pointerTriangles: false,
+  spawnOnClick: true,
   flashlight: true,
   flashlightRadius: 200,
   flashlightBoost: 3,
@@ -72,6 +73,7 @@ const BOOLEAN_KEYS = [
   'triangles',
   'pointerLinks',
   'pointerTriangles',
+  'spawnOnClick',
   'flashlight',
 ] as const;
 
