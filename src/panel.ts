@@ -5,6 +5,8 @@ import type { ParticleNetwork } from './particle-network.js';
 /** Builds the Tweakpane controls for `network` inside `container`. */
 export function createPanel(network: ParticleNetwork, container: HTMLElement) {
   const { settings } = network;
+  // Dragging a slider over the canvas would otherwise add a particle
+  container.setAttribute('data-particle-network-ignore', '');
   const pane = new Pane({ title: 'Controls', container });
   const stats = { fps: 0 };
 
@@ -146,6 +148,7 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
       window.cancelAnimationFrame(frameRequest);
       unsubscribe();
       pane.dispose();
+      container.removeAttribute('data-particle-network-ignore');
     },
   };
 }

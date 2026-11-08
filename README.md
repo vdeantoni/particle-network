@@ -2,7 +2,7 @@
 
 ![Animation](https://miro.medium.com/max/1400/1*a4tiXdRcOxYEQn-SyV6Jcw.png)
 
-Particles drift across a canvas, and a line links each pair closer than the link distance. Lines fade as their particles move apart, and the triangles they form can be filled. The pointer can attract, repel or swirl particles, and a click adds a particle where you click. An optional panel exposes every setting.
+Particles drift across a canvas, and a line links each pair closer than the link distance. Lines fade as their particles move apart, and the triangles they form can be filled. The pointer can attract, repel or swirl particles, and pressing adds a particle that you can drag into place. An optional panel exposes every setting.
 
 [Live demo](https://particle-network-live.vercel.app/), where `h` or the button in the top-right corner opens the panel.
 
@@ -83,7 +83,7 @@ export function Hero() {
 
 ### Behind page content
 
-A canvas behind text and buttons never receives pointer events, because the content on top of it does. Pass `pointerTarget: 'window'` to follow the pointer over the whole page instead. The pointer only counts while it's over the canvas's area, and clicks on links, buttons and form controls don't add particles. Turn `background` off to let the page's own background show through.
+A canvas behind text and buttons never receives pointer events, because the content on top of it does. Pass `pointerTarget: 'window'` to follow the pointer over the whole page instead. The pointer only counts while it's over the canvas's area. Presses on links, buttons, form controls, the panel, and anything inside an element with a `data-particle-network-ignore` attribute don't add particles. Turn `background` off to let the page's own background show through.
 
 ## Options
 
@@ -134,7 +134,7 @@ Colors are hex strings like `'#4d7cff'`, which the panel's color pickers need.
 | `forceStrength`          | `0.1`        |                                                                                                                        |
 | `pointerLinks`           | `true`       | Links the pointer to nearby particles.                                                                                 |
 | `pointerTriangles`       | `false`      | Fills triangles between the pointer and pairs of linked particles.                                                     |
-| `spawnOnClick`           | `true`       | A click adds a particle.                                                                                               |
+| `spawnOnClick`           | `true`       | Pressing adds a particle, which follows the pointer until release.                                                     |
 | `flashlight`             | `true`       | Brightens links and triangles near the pointer.                                                                        |
 | `flashlightRadius`       | `200`        | Reach of the flashlight, in px.                                                                                        |
 | `flashlightBoost`        | `3`          | Opacity at the pointer is multiplied by 1 + this.                                                                      |
