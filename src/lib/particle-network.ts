@@ -112,6 +112,10 @@ export class ParticleNetwork {
     this.pointer = null;
   }
 
+  public spawnParticle(x: number, y: number) {
+    this.particles.push(Particle.create(x, y));
+  }
+
   public randomize() {
     this.particles.length = 0;
     this.fades.clear();
@@ -169,7 +173,10 @@ export class ParticleNetwork {
     this.particles.length = Math.min(this.particles.length, population);
     while (this.particles.length < population) {
       this.particles.push(
-        Particle.create(-margin, -margin, width + margin, height + margin),
+        Particle.create(
+          Math.random() * (width + 2 * margin) - margin,
+          Math.random() * (height + 2 * margin) - margin,
+        ),
       );
     }
   }

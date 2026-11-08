@@ -29,13 +29,13 @@ export class Particle {
 
   // Velocity and size are normalized to 0..1 so speed and radius settings
   // apply to existing particles without respawning them
-  public static create(minX: number, minY: number, maxX: number, maxY: number) {
+  public static create(x: number, y: number) {
     const angle = random(0, 2 * Math.PI);
     // sqrt spreads velocities evenly over the disk instead of bunching slow ones
     const speed = Math.sqrt(Math.random());
     return new Particle(
-      random(minX, maxX),
-      random(minY, maxY),
+      x,
+      y,
       speed * Math.cos(angle),
       speed * Math.sin(angle),
       Math.random(),

@@ -99,6 +99,9 @@ export function createPanel(settings: Settings, network: ParticleNetwork) {
   mouse.addBinding(settings, 'pointerTriangles', {
     label: 'cursor triangles',
   });
+  mouse.addBinding(settings, 'spawnOnClick', {
+    label: 'click adds particle',
+  });
 
   const flashlight = pane.addFolder({ title: 'Flashlight' });
   flashlight.addBinding(settings, 'flashlight', { label: 'on' });
