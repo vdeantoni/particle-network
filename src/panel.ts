@@ -1,15 +1,10 @@
 import { Pane } from 'tweakpane';
-import {
-  DEFAULT_SETTINGS,
-  RANGES,
-  saveSettings,
-  type Settings,
-} from './lib/settings';
-import type { ParticleNetwork } from './lib/particle-network';
+import { RANGES } from './settings';
+import type { ParticleNetwork } from './particle-network';
 
-export function createPanel(settings: Settings, network: ParticleNetwork) {
-  const container = document.getElementById('panel')!;
-  const toggle = document.getElementById('panel-toggle')!;
+/** Builds the Tweakpane controls for `network` inside `container`. */
+export function createPanel(network: ParticleNetwork, container: HTMLElement) {
+  const { settings } = network;
   const pane = new Pane({ title: 'Controls', container });
   const stats = { fps: 0 };
 
@@ -115,42 +110,25 @@ export function createPanel(settings: Settings, network: ParticleNetwork) {
   });
 
   const background = pane.addFolder({ title: 'Background' });
+  background.addBinding(settings, 'background', { label: 'fill' });
   background.addBinding(settings, 'backgroundInner', { label: 'center' });
   background.addBinding(settings, 'backgroundOuter', { label: 'edges' });
 
-  pane.addButton({ title: 'Reset to defaults' }).on('click', () => {
-    Object.assign(settings, DEFAULT_SETTINGS);
-    pane.refresh();
-    saveSettings(settings);
-  });
+  pane
+    .addButton({ title: 'Reset to defaults' })
+    .on('click', () => network.reset());
 
   pane.on('change', (event) => {
     // Monitors emit change on every poll, not only on user input
     if (event.target !== fps && event.last) {
-      saveSettings(settings);
+      network.save();
     }
   });
-
-  const togglePanel = () => {
-    container.hidden = !container.hidden;
-    toggle.setAttribute('aria-expanded', String(!container.hidden));
-  };
-  toggle.addEventListener('click', togglePanel);
-  window.addEventListener('keydown', (event) => {
-    if (
-      event.key.toLowerCase() !== 'h' ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.altKey ||
-      event.target instanceof HTMLInputElement
-    ) {
-      return;
-    }
-    togglePanel();
-  });
+  const unsubscribe = network.onChange(() => pane.refresh());
 
   let frames = 0;
   let since = performance.now();
+  let frameRequest = 0;
   const countFrames = (now: number) => {
     frames++;
     if (now - since >= 500) {
@@ -158,7 +136,16 @@ export function createPanel(settings: Settings, network: ParticleNetwork) {
       frames = 0;
       since = now;
     }
-    window.requestAnimationFrame(countFrames);
+    frameRequest = window.requestAnimationFrame(countFrames);
   };
-  window.requestAnimationFrame(countFrames);
+  frameRequest = window.requestAnimationFrame(countFrames);
+
+  return {
+    /** Removes the controls and stops the FPS monitor. */
+    destroy() {
+      window.cancelAnimationFrame(frameRequest);
+      unsubscribe();
+      pane.dispose();
+    },
+  };
 }
