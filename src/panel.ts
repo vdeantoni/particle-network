@@ -5,9 +5,9 @@ import {
   saveSettings,
   type Settings,
 } from './lib/settings';
-import type { Simulator } from './lib/simulator';
+import type { ParticleNetwork } from './lib/particle-network';
 
-export function createPanel(settings: Settings, simulator: Simulator) {
+export function createPanel(settings: Settings, network: ParticleNetwork) {
   const container = document.getElementById('panel')!;
   const toggle = document.getElementById('panel-toggle')!;
   const pane = new Pane({ title: 'Controls', container });
@@ -16,8 +16,8 @@ export function createPanel(settings: Settings, simulator: Simulator) {
   const simulation = pane.addFolder({ title: 'Simulation' });
   simulation.addBinding(settings, 'paused');
   simulation
-    .addButton({ title: 'Randomize points' })
-    .on('click', () => simulator.randomize());
+    .addButton({ title: 'Randomize particles' })
+    .on('click', () => network.randomize());
   const fps = simulation.addBinding(stats, 'fps', {
     readonly: true,
     view: 'graph',
@@ -39,14 +39,14 @@ export function createPanel(settings: Settings, simulator: Simulator) {
     ...RANGES.maxRadius,
     label: 'max radius',
   });
-  particles.addBinding(settings, 'pointColor', { label: 'color' });
+  particles.addBinding(settings, 'particleColor', { label: 'color' });
 
   const connections = pane.addFolder({ title: 'Connections' });
-  connections.addBinding(settings, 'connectDistance', {
-    ...RANGES.connectDistance,
+  connections.addBinding(settings, 'linkDistance', {
+    ...RANGES.linkDistance,
     label: 'distance',
   });
-  connections.addBinding(settings, 'fade', RANGES.fade);
+  connections.addBinding(settings, 'falloff', RANGES.falloff);
   connections.addBinding(settings, 'lineWidth', {
     ...RANGES.lineWidth,
     label: 'width',
@@ -78,7 +78,7 @@ export function createPanel(settings: Settings, simulator: Simulator) {
   });
 
   const mouse = pane.addFolder({ title: 'Mouse' });
-  mouse.addBinding(settings, 'mouseMode', {
+  mouse.addBinding(settings, 'pointerForce', {
     label: 'force',
     options: {
       off: 'off',
@@ -87,16 +87,16 @@ export function createPanel(settings: Settings, simulator: Simulator) {
       vortex: 'vortex',
     },
   });
-  mouse.addBinding(settings, 'mouseRadius', {
-    ...RANGES.mouseRadius,
+  mouse.addBinding(settings, 'forceRadius', {
+    ...RANGES.forceRadius,
     label: 'radius',
   });
-  mouse.addBinding(settings, 'mouseStrength', {
-    ...RANGES.mouseStrength,
+  mouse.addBinding(settings, 'forceStrength', {
+    ...RANGES.forceStrength,
     label: 'strength',
   });
-  mouse.addBinding(settings, 'cursorLinks', { label: 'cursor links' });
-  mouse.addBinding(settings, 'cursorTriangles', {
+  mouse.addBinding(settings, 'pointerLinks', { label: 'cursor links' });
+  mouse.addBinding(settings, 'pointerTriangles', {
     label: 'cursor triangles',
   });
 
