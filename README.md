@@ -53,7 +53,7 @@ import { useState } from 'react';
 import type { ParticleNetwork } from '@vdeantoni/particle-network';
 import {
   ParticleNetworkCanvas,
-  ParticleNetworkPanel,
+  ParticleNetworkSettings,
 } from '@vdeantoni/particle-network/react';
 
 export function Hero() {
@@ -68,18 +68,30 @@ export function Hero() {
         className="absolute inset-0 -z-10 size-full"
       />
       {/* Page content */}
-      {network && (
-        <ParticleNetworkPanel
-          network={network}
-          className="fixed right-4 top-4"
-        />
-      )}
+      <ParticleNetworkSettings
+        network={network}
+        className="absolute bottom-6 right-6"
+      />
     </section>
   );
 }
 ```
 
-`ref` receives the `ParticleNetwork`, which the panel needs. Changes to the `settings` prop apply live. Only keys whose values changed are applied, so an inline object doesn't undo panel edits on every render, and a key you remove goes back to its default. `<ParticleNetworkPanel>` loads Tweakpane when it first renders, so pages that never show it never download it.
+`ref` receives the `ParticleNetwork`, which the settings need. Changes to the `settings` prop apply live. Only keys whose values changed are applied, so an inline object doesn't undo panel edits on every render, and a key you remove goes back to its default.
+
+`<ParticleNetworkSettings>` is a button that opens the panel, which you position with `className`. The `h` key toggles it too, and Escape closes it. Tweakpane loads when the panel first opens, so visitors who never open it never download it.
+
+| Prop              | Default                | Description                                                                                                                                     |
+| ----------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `network`         |                        | The network to control. Until it exists the button shows but the panel doesn't open.                                                            |
+| `shortcut`        | `'h'`                  | Key that toggles the panel, compared with `KeyboardEvent.key` ignoring case. `null` turns it off. It's ignored while the user types in a field. |
+| `placement`       | `'above'`              | Opens the panel `'above'` or `'below'` the button, aligned to its right edge.                                                                   |
+| `label`           | `'Animation settings'` | The button's accessible name and tooltip.                                                                                                       |
+| `className`       |                        | Positions the button. The panel is anchored to it.                                                                                              |
+| `buttonClassName` |                        | Styles the button in place of its built-in inline styles.                                                                                       |
+| `children`        | a sliders icon         | The button's content.                                                                                                                           |
+
+For a panel without the button, render `<ParticleNetworkPanel network={network} />` wherever you want it.
 
 ### Behind page content
 
