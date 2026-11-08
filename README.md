@@ -128,11 +128,11 @@ Colors are hex strings like `'#4d7cff'`, which the panel's color pickers need.
 | `paused`                 | `false`      | Stops the particles. Links and pointer effects keep updating.                                                          |
 | `density`                | `1`          | Particles per 5,000 px² of canvas.                                                                                     |
 | `maxSpeed`               | `0.15`       | Fastest drift, in px per 1/60 s.                                                                                       |
-| `minRadius`, `maxRadius` | `0.5`, `1.5` | Range of particle radii, in px.                                                                                        |
+| `minRadius`, `maxRadius` | `0.5`, `1.5` | Range of particle radii, in px. `0` for both hides the particles, which still move and link.                           |
 | `particleColor`          | `'#ffffff'`  |                                                                                                                        |
 | `linkDistance`           | `100`        | Particles closer than this many px are linked.                                                                         |
 | `falloff`                | `2`          | How fast a link fades with distance. Higher values fade sooner.                                                        |
-| `lineWidth`              | `0.6`        | Link width in px.                                                                                                      |
+| `lineWidth`              | `0.6`        | Link width in px. `0` hides the lines and keeps the triangles.                                                         |
 | `lineColor`              | `'#ffffff'`  |                                                                                                                        |
 | `additive`               | `true`       | Overlapping lines add up and glow. Turn it off on light backgrounds, where the glow fades to white.                    |
 | `triangles`              | `false`      | Fills the triangles that links form.                                                                                   |
