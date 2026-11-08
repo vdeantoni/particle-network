@@ -192,6 +192,15 @@ export class ParticleNetwork {
     // A release outside the target still ends the drag
     window.addEventListener('pointerup', release, { signal });
     window.addEventListener('pointercancel', cancel, { signal });
+    // While a particle is dragged, the press shouldn't also select the
+    // page's text or drag its images
+    const holdPage = (event: Event) => {
+      if (this.held) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener('selectstart', holdPage, { signal });
+    document.addEventListener('dragstart', holdPage, { signal });
 
     this.observer = new IntersectionObserver(([entry]) => {
       this.visible = entry.isIntersecting;
