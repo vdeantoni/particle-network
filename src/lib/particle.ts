@@ -3,8 +3,8 @@ function random(min: number, max: number) {
 }
 
 export class Particle {
-  // Extra velocity from pointer forces and shockwaves, in pixels per reference
-  // frame. It decays so pushed particles settle back into their own drift.
+  // Extra velocity from pointer forces, in pixels per reference frame.
+  // It decays so pushed particles settle back into their own drift.
   public pushX = 0;
   public pushY = 0;
 
@@ -29,13 +29,13 @@ export class Particle {
 
   // Velocity and size are normalized to 0..1 so speed and radius settings
   // apply to existing particles without respawning them
-  public static create(minX: number, minY: number, maxX: number, maxY: number) {
+  public static create(x: number, y: number) {
     const angle = random(0, 2 * Math.PI);
     // sqrt spreads velocities evenly over the disk instead of bunching slow ones
     const speed = Math.sqrt(Math.random());
     return new Particle(
-      random(minX, maxX),
-      random(minY, maxY),
+      x,
+      y,
       speed * Math.cos(angle),
       speed * Math.sin(angle),
       Math.random(),
