@@ -35,6 +35,8 @@ export interface ParticleNetworkCanvasProps {
   pointerTarget?: 'canvas' | 'window';
   storageKey?: string;
   respectReducedMotion?: boolean;
+  /** `false` stops the animation, for a canvas that's covered without leaving the screen. */
+  active?: boolean;
   className?: string;
   style?: CSSProperties;
   /** Receives the `ParticleNetwork`, to hand to `<ParticleNetworkPanel>`. */
@@ -47,6 +49,7 @@ export function ParticleNetworkCanvas({
   pointerTarget,
   storageKey,
   respectReducedMotion,
+  active = true,
   className,
   style,
   ref,
@@ -87,6 +90,12 @@ export function ParticleNetworkCanvas({
       network.set(changed);
     }
   }, [network, settings]);
+
+  useEffect(() => {
+    if (network) {
+      network.active = active;
+    }
+  }, [network, active]);
 
   return (
     <canvas ref={canvas} className={className} style={style} aria-hidden />
