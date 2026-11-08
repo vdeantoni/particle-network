@@ -475,6 +475,9 @@ export class ParticleNetwork {
     const { ctx } = this;
     const { minRadius, maxRadius, particleColor } = this.settings;
     const largest = Math.max(minRadius, maxRadius);
+    if (largest === 0) {
+      return;
+    }
 
     ctx.fillStyle = particleColor;
     this.particles.forEach((particle) => {
@@ -594,6 +597,9 @@ export class ParticleNetwork {
       this.fades.clear();
     }
 
+    if (lineWidth === 0) {
+      return;
+    }
     ctx.strokeStyle = lineColor;
     ctx.lineWidth = Math.max(lineWidth, 1 / this.dpr);
     for (let level = 1; level <= ALPHA_LEVELS; level++) {
