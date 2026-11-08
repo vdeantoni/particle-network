@@ -1,12 +1,12 @@
 import Delaunator from 'delaunator';
-import { Particle } from './particle';
+import { Particle } from './particle.js';
 import {
   DEFAULT_SETTINGS,
   REFERENCE_FPS,
   loadSettings,
   saveSettings,
   type Settings,
-} from './settings';
+} from './settings.js';
 
 const FRAME_MS = 1000 / REFERENCE_FPS;
 const ALPHA_LEVELS = 32;

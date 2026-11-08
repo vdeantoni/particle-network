@@ -4,21 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-The package manager is pnpm (`pnpm-lock.yaml`).
+The package manager is pnpm (`pnpm-lock.yaml`). The repo is both the npm package `@vdeantoni/particle-network` and its demo site.
 
-- **Dev server:** `pnpm dev` (Vite, port 5173)
-- **Build:** `pnpm build` (runs `tsc && vite build`; `tsc` only type-checks because `noEmit` is on)
+- **Dev server (demo):** `pnpm dev` (Vite, port 5173)
+- **Library build:** `pnpm build` emits ESM `.js` and `.d.ts` files into `dist/` with `tsc -p tsconfig.build.json`, no bundler. `prepack` runs it, so `pnpm pack` and `pnpm publish` always ship a fresh build.
+- **Demo build:** `pnpm build:demo` type-checks everything and builds the demo into `dist-demo/`; `vercel.json` points Vercel at that command and folder. `pnpm preview` serves it.
 - **Type-check only:** `pnpm exec tsc`
-- **Preview production build:** `pnpm preview`
 - **Format:** `pnpm dlx prettier --write src demo` (Prettier isn't a devDependency; `.prettierrc` sets single quotes and trailing commas)
+- **Package checks:** `pnpm dlx publint` and `pnpm dlx @arethetypeswrong/cli --pack . --profile esm-only` check that the exports and types resolve for consumers.
 
-No test runner or linter is configured, so `pnpm build` is the only automated check.
+No test runner or linter is configured, so the builds and the package checks are the only automated checks. Publishing is manual: `pnpm publish` from a clean `main` after bumping `version`. `publishConfig` pins the public npm registry, because a machine-wide registry setting would otherwise receive the package.
 
 ## Architecture
 
 This is a vanilla TypeScript canvas animation that renders a particle network: particles drift across a canvas and links are drawn between particles within `linkDistance`, with opacity based on proximity. The code says "link" for these lines; the panel's "Connections" and "Mouse" folders keep friendlier labels.
 
-`src/` is the embeddable library, with `src/index.ts` as its entry point and `src/panel.ts` as a separate one, so a page only loads Tweakpane if it shows the panel. `demo/` is the full-screen demo site: `index.html` declares `<canvas id="canvas">` and the panel elements, then loads `demo/main.ts`, which creates the `ParticleNetwork` and the panel and owns the toggle button and the `h` shortcut. CSS in `demo/style.css` sizes the canvas to fill the viewport. The library never styles the canvas or the page; the embedding page does.
+`src/` is the embeddable library, published with three entry points in `package.json` `exports`: `src/index.ts`, `src/panel.ts` (Tweakpane, so a page only loads it if it shows the panel) and `src/react.tsx`. Relative imports end in `.js` even though the files are `.ts`: `tsc` doesn't rewrite paths in `.d.ts` files, and consumers resolving the types need the extension of the emitted files. `demo/` is the full-screen demo site: `index.html` declares `<canvas id="canvas">` and the panel elements, then loads `demo/main.ts`, which creates the `ParticleNetwork` and the panel and owns the toggle button and the `h` shortcut. CSS in `demo/style.css` sizes the canvas to fill the viewport. The library never styles the canvas or the page; the embedding page does.
 
 **Core modules:**
 
@@ -28,6 +29,7 @@ This is a vanilla TypeScript canvas animation that renders a particle network: p
 - **`Particle`** (`src/particle.ts`) holds position, a velocity inside the unit disk, and a `size` from 0 to 1. The network scales them by `maxSpeed` and the radius range at draw time, so those settings apply to existing particles.
 - **Pointer interactions** live in the `ParticleNetwork`, which listens on its `pointerTarget`: the canvas by default, or `document.documentElement` for `'window'`, used when the canvas sits behind page content and never receives events itself. It stores the pointer in viewport coordinates and maps it onto the canvas every frame, so scrolling under a still mouse keeps it in place; positions outside the canvas count as no pointer. A click adds a particle while `spawnOnClick` is on, unless it lands on a link, button or form control. A spawned particle gets a random drift and size like the others; it adds to the population until `randomize()` or the next time `fit()` acts, which trims the list back to the density's count. Forces never change a particle's own drift: they add to its `pushX`/`pushY`, which decays by `PUSH_DECAY` per reference frame so pushed particles settle back. The `pointerForce` modes (attract, repel, vortex) apply within `forceRadius`. Pointer links add lines from the pointer to particles within `linkDistance`. Pointer triangles join the pointer to pairs of particles linked to it and to each other (all pairs when overlapping, angular neighbors when mosaic). They share the triangle fades with `POINTER_INDEX` as their third index and vanish when the pointer leaves. The flashlight multiplies line and triangle opacity near the pointer.
 - **Panel** (`src/panel.ts`) builds the Tweakpane controls in a container the caller provides and returns `destroy()`. It calls `network.save()` on each finished change, skipping the FPS monitor, which emits `change` on every poll.
+- **React** (`src/react.tsx`, marked `'use client'` for Next's server components) wraps both. `<ParticleNetworkCanvas>` creates the network in an effect, destroys it on unmount, and hands it out through `ref`. Its `settings` prop is compared with the last one applied, so only changed keys reach `set()`: an inline object would otherwise undo panel edits on every render. A key dropped from the prop goes back to its default. `<ParticleNetworkPanel>` imports `./panel.js` dynamically, which bundlers split into its own chunk.
 
 Behavior that spans these files:
 
@@ -39,6 +41,6 @@ Behavior that spans these files:
 ## Tech Stack
 
 - TypeScript (strict mode, ES2023 target)
-- Vite 8 (bundler/dev server, uses Rolldown), no `vite.config`, so Vite defaults apply
-- No framework: direct Canvas 2D API
+- Vite 8 (dev server and demo build, uses Rolldown), no `vite.config`, so Vite defaults apply
+- No framework in the core: direct Canvas 2D API. React is an optional peer dependency used only by `src/react.tsx`, and only `@types/react` is installed, because nothing in the repo renders React.
 - Runtime dependencies: Tweakpane 4 for the control panel, and `delaunator` for the mosaic triangles. Tweakpane's type declarations import `@tweakpane/core`, so that devDependency is required for `tsc` even though nothing imports it directly.

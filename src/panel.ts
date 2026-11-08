@@ -1,6 +1,6 @@
 import { Pane } from 'tweakpane';
-import { RANGES } from './settings';
-import type { ParticleNetwork } from './particle-network';
+import { RANGES } from './settings.js';
+import type { ParticleNetwork } from './particle-network.js';
 
 /** Builds the Tweakpane controls for `network` inside `container`. */
 export function createPanel(network: ParticleNetwork, container: HTMLElement) {
