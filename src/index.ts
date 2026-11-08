@@ -1,7 +1,7 @@
 export {
   ParticleNetwork,
   type ParticleNetworkOptions,
-} from './particle-network';
+} from './particle-network.js';
 export {
   DEFAULT_SETTINGS,
   POINTER_FORCES,
@@ -12,4 +12,4 @@ export {
   type Settings,
   type TriangleShade,
   type TriangleStyle,
-} from './settings';
+} from './settings.js';
