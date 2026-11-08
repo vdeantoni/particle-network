@@ -1,8 +1,16 @@
 {
-  "name": "particle-network",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Drifting particles linked to their neighbors on a full-screen canvas",
+  "name": "@vdeantoni/particle-network",
+  "version": "0.1.0",
+  "description": "Drifting particles linked to their neighbors on a canvas, with an optional settings panel and React components",
+  "keywords": [
+    "animation",
+    "background",
+    "canvas",
+    "particles",
+    "particle-network",
+    "plexus",
+    "react"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vdeantoni/particle-network.git"
@@ -14,13 +22,46 @@
   },
   "homepage": "https://github.com/vdeantoni/particle-network#readme",
   "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./panel": {
+      "types": "./dist/panel.d.ts",
+      "default": "./dist/panel.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview"
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build:demo": "tsc && vite build --outDir dist-demo",
+    "preview": "vite preview --outDir dist-demo",
+    "prepack": "pnpm build"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@tweakpane/core": "2.0.5",
+    "@types/react": "^19.3.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.6"
   },
