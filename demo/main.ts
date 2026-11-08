@@ -1,5 +1,5 @@
-import { ParticleNetwork } from '../src/index';
-import { createPanel } from '../src/panel';
+import { ParticleNetwork } from '../src/index.js';
+import { createPanel } from '../src/panel.js';
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const container = document.getElementById('panel')!;
