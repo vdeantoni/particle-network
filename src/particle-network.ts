@@ -1,12 +1,12 @@
 import Delaunator from 'delaunator';
-import { Particle } from './particle';
+import { Particle } from './particle.js';
 import {
   DEFAULT_SETTINGS,
   REFERENCE_FPS,
   loadSettings,
   saveSettings,
   type Settings,
-} from './settings';
+} from './settings.js';
 
 const FRAME_MS = 1000 / REFERENCE_FPS;
 const ALPHA_LEVELS = 32;
@@ -77,9 +77,9 @@ interface PointerLink {
   level: number;
 }
 
-// Clicks on these belong to the page, so they don't add a particle
-const INTERACTIVE =
-  'a, button, input, select, textarea, label, [role="button"]';
+// Presses on these belong to the page or the panel, so they don't add a particle
+const IGNORED =
+  'a, button, input, select, textarea, label, [role="button"], [data-particle-network-ignore]';
 
 // A spread would copy undefined values over the defaults
 function definedValues(settings: Partial<Settings>) {
@@ -120,6 +120,8 @@ export class ParticleNetwork {
   // Kept in viewport coordinates and mapped every frame, so the pointer stays
   // put when the page scrolls under a still mouse
   private client: { x: number; y: number } | null = null;
+  // Added by the current press, and pinned to the pointer until release
+  private held: Particle | null = null;
   private reducedMotion: MediaQueryList | null;
   private observer: IntersectionObserver;
   private events = new AbortController();
@@ -171,11 +173,34 @@ export class ParticleNetwork {
     const untrack = () => {
       this.client = null;
     };
+    const release = () => {
+      this.held = null;
+    };
+    // The browser took the gesture over, usually to scroll, so the press
+    // wasn't meant to add a particle
+    const cancel = () => {
+      this.client = null;
+      const index = this.held ? this.particles.indexOf(this.held) : -1;
+      if (index >= 0) {
+        this.particles.splice(index, 1);
+      }
+      this.held = null;
+    };
     target.addEventListener('pointermove', track, { signal });
-    target.addEventListener('pointerdown', track, { signal });
+    target.addEventListener('pointerdown', this.press, { signal });
     target.addEventListener('pointerleave', untrack, { signal });
-    target.addEventListener('pointercancel', untrack, { signal });
-    target.addEventListener('click', this.click, { signal });
+    // A release outside the target still ends the drag
+    window.addEventListener('pointerup', release, { signal });
+    window.addEventListener('pointercancel', cancel, { signal });
+    // While a particle is dragged, the press shouldn't also select the
+    // page's text or drag its images
+    const holdPage = (event: Event) => {
+      if (this.held) {
+        event.preventDefault();
+      }
+    };
+    document.addEventListener('selectstart', holdPage, { signal });
+    document.addEventListener('dragstart', holdPage, { signal });
 
     this.observer = new IntersectionObserver(([entry]) => {
       this.visible = entry.isIntersecting;
@@ -248,12 +273,20 @@ export class ParticleNetwork {
     return { x, y };
   }
 
-  private click = (event: MouseEvent) => {
+  private press = (event: PointerEvent) => {
+    this.client = { x: event.clientX, y: event.clientY };
     const position = this.toCanvas(event.clientX, event.clientY);
-    const onControl =
-      event.target instanceof Element && event.target.closest(INTERACTIVE);
-    if (this.settings.spawnOnClick && position && !onControl) {
-      this.particles.push(Particle.create(position.x, position.y));
+    const ignored =
+      event.target instanceof Element && event.target.closest(IGNORED);
+    if (
+      this.settings.spawnOnClick &&
+      event.isPrimary &&
+      event.button === 0 &&
+      position &&
+      !ignored
+    ) {
+      this.held = Particle.create(position.x, position.y);
+      this.particles.push(this.held);
     }
   };
 
@@ -345,6 +378,10 @@ export class ParticleNetwork {
         particle.x = wrap(particle.x, this.width, this.linkDistance);
         particle.y = wrap(particle.y, this.height, this.linkDistance);
       });
+    }
+    if (this.held && this.pointer) {
+      this.held.x = this.pointer.x;
+      this.held.y = this.pointer.y;
     }
 
     ctx.globalCompositeOperation = settings.additive
