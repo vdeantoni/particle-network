@@ -77,7 +77,7 @@ export function Hero() {
 }
 ```
 
-`ref` receives the `ParticleNetwork`, which the settings need. Changes to the `settings` prop apply live. Only keys whose values changed are applied, so an inline object doesn't undo panel edits on every render, and a key you remove goes back to its default.
+`ref` receives the `ParticleNetwork`, which the settings need. Changes to the `settings` prop apply live. Only keys whose values changed are applied, so an inline object doesn't undo panel edits on every render, and a key you remove goes back to its default. `active={false}` stops the animation while content covers the canvas.
 
 `<ParticleNetworkSettings>` is a button that opens the panel, which you position with `className`. The `h` key toggles it too, and Escape closes it. Tweakpane loads when the panel first opens, so visitors who never open it never download it.
 
@@ -106,13 +106,14 @@ A canvas behind text and buttons never receives pointer events, because the cont
 | `storageKey`           | none       | Saves panel changes in localStorage under this key and restores them on the next visit. |
 | `respectReducedMotion` | `true`     | Holds particles still when the user prefers reduced motion.                             |
 
-The animation pauses while the canvas is off screen.
+The animation pauses while the canvas is off screen. A canvas fixed behind the page always counts as on screen, even while opaque content covers it, so set `active` to `false` to pause it yourself.
 
 ## Methods
 
 | Method               | Description                                                                        |
 | -------------------- | ---------------------------------------------------------------------------------- |
 | `settings`           | The live settings object, read every frame.                                        |
+| `active`             | Set it to `false` to stop the animation, and back to `true` to resume it.          |
 | `set(settings)`      | Changes settings and makes them what `reset()` returns to.                         |
 | `reset()`            | Drops changes made in the panel.                                                   |
 | `randomize()`        | Replaces every particle with a new random one.                                     |

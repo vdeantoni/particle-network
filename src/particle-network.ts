@@ -128,6 +128,7 @@ export class ParticleNetwork {
   private listeners = new Set<() => void>();
   private frameRequest = 0;
   private visible = true;
+  private isActive = true;
   private cols = 0;
   private rows = 0;
   private last: number = 0;
@@ -204,14 +205,23 @@ export class ParticleNetwork {
 
     this.observer = new IntersectionObserver(([entry]) => {
       this.visible = entry.isIntersecting;
-      if (this.visible && !this.frameRequest && !signal.aborted) {
-        // Time spent off screen shouldn't count as one long frame
-        this.last = 0;
-        this.frameRequest = window.requestAnimationFrame(this.loop);
-      }
+      this.resume();
     });
     this.observer.observe(canvas);
     this.frameRequest = window.requestAnimationFrame(this.loop);
+  }
+
+  /**
+   * While false, the animation stops as it does off screen. A canvas fixed
+   * behind the page always counts as on screen, even under opaque content.
+   */
+  public get active() {
+    return this.isActive;
+  }
+
+  public set active(active: boolean) {
+    this.isActive = active;
+    this.resume();
   }
 
   /** Changes settings and makes them what `reset()` returns to. */
@@ -261,6 +271,19 @@ export class ParticleNetwork {
 
   private notify() {
     this.listeners.forEach((listener) => listener());
+  }
+
+  private resume() {
+    if (
+      this.visible &&
+      this.isActive &&
+      !this.frameRequest &&
+      !this.events.signal.aborted
+    ) {
+      // Time spent stopped shouldn't count as one long frame
+      this.last = 0;
+      this.frameRequest = window.requestAnimationFrame(this.loop);
+    }
   }
 
   private toCanvas(clientX: number, clientY: number) {
@@ -351,8 +374,8 @@ export class ParticleNetwork {
 
   private loop = (timestamp: number) => {
     this.frameRequest = 0;
-    // The observer schedules the next frame when the canvas is back on screen
-    if (!this.visible) {
+    // resume() schedules the next frame once the canvas is on screen and active
+    if (!this.visible || !this.isActive) {
       return;
     }
     const delta = !this.last ? 1 : (timestamp - this.last) / FRAME_MS;
