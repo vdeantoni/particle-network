@@ -1,6 +1,12 @@
 import Delaunator from 'delaunator';
-import { REFERENCE_FPS, type Settings } from './settings';
 import { Particle } from './particle';
+import {
+  DEFAULT_SETTINGS,
+  REFERENCE_FPS,
+  loadSettings,
+  saveSettings,
+  type Settings,
+} from './settings';
 
 const FRAME_MS = 1000 / REFERENCE_FPS;
 const ALPHA_LEVELS = 32;
@@ -71,7 +77,36 @@ interface PointerLink {
   level: number;
 }
 
+// Clicks on these belong to the page, so they don't add a particle
+const INTERACTIVE =
+  'a, button, input, select, textarea, label, [role="button"]';
+
+// A spread would copy undefined values over the defaults
+function definedValues(settings: Partial<Settings>) {
+  return Object.fromEntries(
+    Object.entries(settings).filter(([, value]) => value !== undefined),
+  ) as Partial<Settings>;
+}
+
+export interface ParticleNetworkOptions {
+  /** Merged over `DEFAULT_SETTINGS`; `reset()` returns to these. */
+  settings?: Partial<Settings>;
+  /**
+   * Where pointer events are read. Use `'window'` for a canvas behind page
+   * content, which never receives pointer events itself. Defaults to the canvas.
+   */
+  pointerTarget?: 'canvas' | 'window' | HTMLElement;
+  /** Saves panel changes in localStorage under this key and restores them. */
+  storageKey?: string;
+  /** Holds particles still when the user prefers reduced motion. Defaults to true. */
+  respectReducedMotion?: boolean;
+}
+
 export class ParticleNetwork {
+  /** The live settings, read every frame. Change them with `set()`. */
+  public readonly settings: Settings;
+  private base: Settings;
+  private storageKey?: string;
   private ctx: CanvasRenderingContext2D;
   private particles: Particle[] = [];
   private cells: number[][] = [];
@@ -82,6 +117,15 @@ export class ParticleNetwork {
   private delaunay?: Delaunator<Float64Array>;
   private frame = 0;
   private pointer: { x: number; y: number } | null = null;
+  // Kept in viewport coordinates and mapped every frame, so the pointer stays
+  // put when the page scrolls under a still mouse
+  private client: { x: number; y: number } | null = null;
+  private reducedMotion: MediaQueryList | null;
+  private observer: IntersectionObserver;
+  private events = new AbortController();
+  private listeners = new Set<() => void>();
+  private frameRequest = 0;
+  private visible = true;
   private cols = 0;
   private rows = 0;
   private last: number = 0;
@@ -90,30 +134,90 @@ export class ParticleNetwork {
   private dpr = 0;
   private linkDistance = 0;
   private density = 0;
-  private background: CanvasGradient | string = 'black';
-  private backgroundKey = '';
+  private gradient: CanvasGradient | null = null;
+  private gradientKey = '';
 
   constructor(
     private canvas: HTMLCanvasElement,
-    private settings: Settings,
+    options: ParticleNetworkOptions = {},
   ) {
+    const {
+      pointerTarget = 'canvas',
+      storageKey,
+      respectReducedMotion = true,
+    } = options;
     this.ctx = canvas.getContext('2d')!;
+    this.base = {
+      ...DEFAULT_SETTINGS,
+      ...definedValues(options.settings ?? {}),
+    };
+    this.storageKey = storageKey;
+    const stored = storageKey ? loadSettings(storageKey) : {};
+    this.settings = { ...this.base, ...stored };
+    this.reducedMotion = respectReducedMotion
+      ? window.matchMedia('(prefers-reduced-motion: reduce)')
+      : null;
+
+    const target =
+      pointerTarget === 'window'
+        ? document.documentElement
+        : pointerTarget === 'canvas'
+          ? canvas
+          : pointerTarget;
+    const { signal } = this.events;
+    const track = (event: PointerEvent) => {
+      this.client = { x: event.clientX, y: event.clientY };
+    };
+    const untrack = () => {
+      this.client = null;
+    };
+    target.addEventListener('pointermove', track, { signal });
+    target.addEventListener('pointerdown', track, { signal });
+    target.addEventListener('pointerleave', untrack, { signal });
+    target.addEventListener('pointercancel', untrack, { signal });
+    target.addEventListener('click', this.click, { signal });
+
+    this.observer = new IntersectionObserver(([entry]) => {
+      this.visible = entry.isIntersecting;
+      if (this.visible && !this.frameRequest && !signal.aborted) {
+        // Time spent off screen shouldn't count as one long frame
+        this.last = 0;
+        this.frameRequest = window.requestAnimationFrame(this.loop);
+      }
+    });
+    this.observer.observe(canvas);
+    this.frameRequest = window.requestAnimationFrame(this.loop);
   }
 
-  public start = () => {
-    window.requestAnimationFrame(this.loop);
-  };
-
-  public setPointer(x: number, y: number) {
-    this.pointer = { x, y };
+  /** Changes settings and makes them what `reset()` returns to. */
+  public set(settings: Partial<Settings>) {
+    const values = definedValues(settings);
+    Object.assign(this.base, values);
+    Object.assign(this.settings, values);
+    this.save();
+    this.notify();
   }
 
-  public clearPointer() {
-    this.pointer = null;
+  /** Drops changes made in the panel. */
+  public reset() {
+    Object.assign(this.settings, this.base);
+    this.save();
+    this.notify();
   }
 
-  public spawnParticle(x: number, y: number) {
-    this.particles.push(Particle.create(x, y));
+  /** Stores the settings under `storageKey`, if one was given. */
+  public save() {
+    if (this.storageKey) {
+      saveSettings(this.storageKey, this.settings, this.base);
+    }
+  }
+
+  /** Calls `listener` after `set()` or `reset()`. Returns an unsubscribe function. */
+  public onChange(listener: () => void) {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
   }
 
   public randomize() {
@@ -121,6 +225,37 @@ export class ParticleNetwork {
     this.fades.clear();
     this.populate();
   }
+
+  /** Stops the animation and removes its event listeners. */
+  public destroy() {
+    window.cancelAnimationFrame(this.frameRequest);
+    this.observer.disconnect();
+    this.events.abort();
+    this.listeners.clear();
+  }
+
+  private notify() {
+    this.listeners.forEach((listener) => listener());
+  }
+
+  private toCanvas(clientX: number, clientY: number) {
+    const rect = this.canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    if (x < 0 || y < 0 || x > rect.width || y > rect.height) {
+      return null;
+    }
+    return { x, y };
+  }
+
+  private click = (event: MouseEvent) => {
+    const position = this.toCanvas(event.clientX, event.clientY);
+    const onControl =
+      event.target instanceof Element && event.target.closest(INTERACTIVE);
+    if (this.settings.spawnOnClick && position && !onControl) {
+      this.particles.push(Particle.create(position.x, position.y));
+    }
+  };
 
   private fit() {
     const width = this.canvas.clientWidth;
@@ -182,17 +317,23 @@ export class ParticleNetwork {
   }
 
   private loop = (timestamp: number) => {
+    this.frameRequest = 0;
+    // The observer schedules the next frame when the canvas is back on screen
+    if (!this.visible) {
+      return;
+    }
     const delta = !this.last ? 1 : (timestamp - this.last) / FRAME_MS;
-    const { ctx, settings } = this;
+    const { ctx, settings, client } = this;
 
     this.fit();
+    this.pointer = client && this.toCanvas(client.x, client.y);
 
     ctx.globalCompositeOperation = 'source-over';
     // Links and particles leave globalAlpha below 1
     ctx.globalAlpha = 1;
     this.drawBackground();
 
-    if (!settings.paused) {
+    if (!settings.paused && !this.reducedMotion?.matches) {
       // After a long pause (hidden tab) forces would otherwise act for minutes
       const pushDelta = Math.min(delta, 4);
       this.applyPointerForce(pushDelta);
@@ -214,7 +355,7 @@ export class ParticleNetwork {
 
     this.last = timestamp;
 
-    window.requestAnimationFrame(this.loop);
+    this.frameRequest = window.requestAnimationFrame(this.loop);
   };
 
   private applyPointerForce(delta: number) {
@@ -265,13 +406,17 @@ export class ParticleNetwork {
 
   private drawBackground() {
     const { ctx, width, height } = this;
-    const { backgroundInner, backgroundOuter } = this.settings;
+    const { background, backgroundInner, backgroundOuter } = this.settings;
+    if (!background) {
+      ctx.clearRect(0, 0, width, height);
+      return;
+    }
 
     const key = `${width}x${height} ${backgroundInner} ${backgroundOuter}`;
-    if (key !== this.backgroundKey) {
+    if (!this.gradient || key !== this.gradientKey) {
       const cx = width / 2;
       const cy = height / 2;
-      const background = ctx.createRadialGradient(
+      const gradient = ctx.createRadialGradient(
         cx,
         cy,
         0,
@@ -279,13 +424,13 @@ export class ParticleNetwork {
         cy,
         Math.hypot(cx, cy),
       );
-      background.addColorStop(0, backgroundInner);
-      background.addColorStop(1, backgroundOuter);
-      this.background = background;
-      this.backgroundKey = key;
+      gradient.addColorStop(0, backgroundInner);
+      gradient.addColorStop(1, backgroundOuter);
+      this.gradient = gradient;
+      this.gradientKey = key;
     }
 
-    ctx.fillStyle = this.background;
+    ctx.fillStyle = this.gradient;
     ctx.fillRect(0, 0, width, height);
   }
 
