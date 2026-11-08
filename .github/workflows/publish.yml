@@ -38,8 +38,10 @@ jobs:
           fi
       - if: steps.check.outputs.publish == 'true'
         run: pnpm install --frozen-lockfile
+      # publint packs without running prepack, so it needs dist built first
       - if: steps.check.outputs.publish == 'true'
         run: |
+          pnpm build
           pnpm dlx publint@0.3.25
           pnpm dlx @arethetypeswrong/cli@0.18.5 --pack . --profile esm-only
       - if: steps.check.outputs.publish == 'true'
