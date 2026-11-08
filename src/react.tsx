@@ -63,8 +63,12 @@ export function ParticleNetworkCanvas({
   );
 
   useEffect(() => {
+    // Reads settings without depending on them: later changes go through
+    // set() below. Recording them as applied keeps that effect from passing
+    // this render's changes to the instance being replaced.
+    applied.current = settings;
     const instance = new ParticleNetwork(canvas.current!, {
-      settings: applied.current,
+      settings,
       pointerTarget,
       storageKey,
       respectReducedMotion,
