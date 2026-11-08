@@ -83,7 +83,7 @@ export function Hero() {
 
 ### Behind page content
 
-A canvas behind text and buttons never receives pointer events, because the content on top of it does. Pass `pointerTarget: 'window'` to follow the pointer over the whole page instead. The pointer only counts while it's over the canvas's area. Presses on links, buttons, form controls, the panel, and anything inside an element with a `data-particle-network-ignore` attribute don't add particles. Turn `background` off to let the page's own background show through.
+A canvas behind text and buttons never receives pointer events, because the content on top of it does. Pass `pointerTarget: 'window'` to follow the pointer over the whole page instead. The pointer only counts while it's over the canvas's area. Presses on links, buttons, form controls, the panel, and anything inside an element with a `data-particle-network-ignore` attribute don't add particles. While a press drags a new particle, it doesn't also select the page's text or drag its images. Text keeps its text cursor, though, so consider `cursor: default` on the content over the canvas. Turn `background` off to let the page's own background show through.
 
 ## Options
 
