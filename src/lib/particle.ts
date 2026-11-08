@@ -3,8 +3,8 @@ function random(min: number, max: number) {
 }
 
 export class Particle {
-  // Extra velocity from pointer forces and shockwaves, in pixels per reference
-  // frame. It decays so pushed particles settle back into their own drift.
+  // Extra velocity from pointer forces, in pixels per reference frame.
+  // It decays so pushed particles settle back into their own drift.
   public pushX = 0;
   public pushY = 0;
 

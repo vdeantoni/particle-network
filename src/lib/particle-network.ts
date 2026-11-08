@@ -44,13 +44,6 @@ function linkLevel(
   return levelAt(particle.distance(other), maxDistance, falloff);
 }
 
-interface Shockwave {
-  x: number;
-  y: number;
-  radius: number;
-  hit: Set<Particle>;
-}
-
 interface TriangleFade {
   a: number;
   b: number;
@@ -89,7 +82,6 @@ export class ParticleNetwork {
   private delaunay?: Delaunator<Float64Array>;
   private frame = 0;
   private pointer: { x: number; y: number } | null = null;
-  private waves: Shockwave[] = [];
   private cols = 0;
   private rows = 0;
   private last: number = 0;
@@ -118,12 +110,6 @@ export class ParticleNetwork {
 
   public clearPointer() {
     this.pointer = null;
-  }
-
-  public emitShockwave(x: number, y: number) {
-    if (this.settings.shockwave) {
-      this.waves.push({ x, y, radius: 0, hit: new Set() });
-    }
   }
 
   public randomize() {
@@ -203,7 +189,6 @@ export class ParticleNetwork {
       // After a long pause (hidden tab) forces would otherwise act for minutes
       const pushDelta = Math.min(delta, 4);
       this.applyPointerForce(pushDelta);
-      this.updateShockwaves(delta);
 
       const step = delta * settings.maxSpeed;
       const pushDecay = PUSH_DECAY ** pushDelta;
@@ -219,7 +204,6 @@ export class ParticleNetwork {
       : 'source-over';
     this.drawLinks(delta);
     this.drawParticles();
-    this.drawShockwaves();
 
     this.last = timestamp;
 
@@ -257,34 +241,6 @@ export class ParticleNetwork {
     });
   }
 
-  // Each wave kicks a particle once, when its ring first covers it. Tracking hits
-  // matters because a kicked particle can move ahead of the ring into its next band.
-  private updateShockwaves(delta: number) {
-    const { shockwaveReach, shockwaveSpeed, shockwaveStrength } = this.settings;
-
-    this.waves = this.waves.filter((wave) => {
-      const to = Math.min(
-        shockwaveReach,
-        wave.radius + (shockwaveSpeed * delta * FRAME_MS) / 1000,
-      );
-      const kick = shockwaveStrength * (1 - to / shockwaveReach);
-
-      this.particles.forEach((particle) => {
-        const dx = particle.x - wave.x;
-        const dy = particle.y - wave.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance < to && distance > 0 && !wave.hit.has(particle)) {
-          wave.hit.add(particle);
-          particle.pushX += (dx / distance) * kick;
-          particle.pushY += (dy / distance) * kick;
-        }
-      });
-
-      wave.radius = to;
-      return to < shockwaveReach;
-    });
-  }
-
   // Multiplier for line and triangle opacity around the pointer
   private flashlightBoostAt(x: number, y: number) {
     const { pointer } = this;
@@ -298,19 +254,6 @@ export class ParticleNetwork {
       return 1;
     }
     return 1 + flashlightBoost * (1 - distance / flashlightRadius) ** 2;
-  }
-
-  private drawShockwaves() {
-    const { ctx, waves } = this;
-    const { shockwaveReach, lineColor } = this.settings;
-
-    ctx.strokeStyle = lineColor;
-    waves.forEach((wave) => {
-      ctx.globalAlpha = Math.max(0, 0.5 * (1 - wave.radius / shockwaveReach));
-      ctx.beginPath();
-      ctx.arc(wave.x, wave.y, wave.radius, 0, 2 * Math.PI);
-      ctx.stroke();
-    });
   }
 
   private drawBackground() {

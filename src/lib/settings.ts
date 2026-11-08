@@ -32,10 +32,6 @@ export const DEFAULT_SETTINGS = {
   forceStrength: 0.1,
   pointerLinks: true,
   pointerTriangles: false,
-  shockwave: true,
-  shockwaveStrength: 3,
-  shockwaveReach: 400,
-  shockwaveSpeed: 600,
   flashlight: true,
   flashlightRadius: 200,
   flashlightBoost: 3,
@@ -57,9 +53,6 @@ export const RANGES = {
   triangleTransition: { min: 0, max: 2000, step: 50 },
   forceRadius: { min: 50, max: 500, step: 10 },
   forceStrength: { min: 0, max: 0.5, step: 0.01 },
-  shockwaveStrength: { min: 0, max: 10, step: 0.1 },
-  shockwaveReach: { min: 100, max: 1500, step: 50 },
-  shockwaveSpeed: { min: 100, max: 3000, step: 50 },
   flashlightRadius: { min: 50, max: 600, step: 10 },
   flashlightBoost: { min: 0, max: 10, step: 0.1 },
 } satisfies Partial<
@@ -79,7 +72,6 @@ const BOOLEAN_KEYS = [
   'triangles',
   'pointerLinks',
   'pointerTriangles',
-  'shockwave',
   'flashlight',
 ] as const;
 
