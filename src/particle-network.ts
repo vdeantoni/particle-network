@@ -475,6 +475,9 @@ export class ParticleNetwork {
     const { ctx } = this;
     const { minRadius, maxRadius, particleColor } = this.settings;
     const largest = Math.max(minRadius, maxRadius);
+    if (largest === 0) {
+      return;
+    }
 
     ctx.fillStyle = particleColor;
     this.particles.forEach((particle) => {
@@ -487,7 +490,7 @@ export class ParticleNetwork {
   }
 
   private drawLinks(delta: number) {
-    const { ctx, cells, cols, rows, linkDistance, particles, adjacency } = this;
+    const { ctx, linkDistance, particles, adjacency } = this;
     const {
       falloff,
       lineColor,
@@ -497,16 +500,8 @@ export class ParticleNetwork {
       pointerLinks,
       pointerTriangles,
     } = this.settings;
+    const drawLines = lineWidth > 0;
     const recordAdjacency = triangles && triangleStyle === 'overlapping';
-
-    cells.forEach((cell) => {
-      cell.length = 0;
-    });
-    particles.forEach((particle, index) => {
-      const row = cellIndex(particle.y, rows, linkDistance);
-      const col = cellIndex(particle.x, cols, linkDistance);
-      cells[row * cols + col].push(index);
-    });
 
     if (recordAdjacency) {
       while (adjacency.length < particles.length) {
@@ -525,6 +520,9 @@ export class ParticleNetwork {
       by: number,
       level: number,
     ) => {
+      if (!drawLines) {
+        return;
+      }
       const lit = Math.round(
         level * this.flashlightBoostAt((ax + bx) / 2, (ay + by) / 2),
       );
@@ -543,31 +541,8 @@ export class ParticleNetwork {
         }
       }
     };
-
-    for (let row = 0; row < rows; row++) {
-      for (let col = 0; col < cols; col++) {
-        const cell = cells[row * cols + col];
-
-        for (let i = 0; i < cell.length; i++) {
-          for (let j = i + 1; j < cell.length; j++) {
-            link(cell[i], cell[j]);
-          }
-        }
-
-        for (const [dc, dr] of NEIGHBORS) {
-          const c = col + dc;
-          const r = row + dr;
-          if (c < 0 || c >= cols || r >= rows) {
-            continue;
-          }
-
-          for (const a of cell) {
-            for (const b of cells[r * cols + c]) {
-              link(a, b);
-            }
-          }
-        }
-      }
+    if (drawLines || recordAdjacency) {
+      this.findNearbyPairs(link);
     }
 
     const { pointer } = this;
@@ -594,11 +569,55 @@ export class ParticleNetwork {
       this.fades.clear();
     }
 
+    if (!drawLines) {
+      return;
+    }
     ctx.strokeStyle = lineColor;
     ctx.lineWidth = Math.max(lineWidth, 1 / this.dpr);
     for (let level = 1; level <= ALPHA_LEVELS; level++) {
       ctx.globalAlpha = level / ALPHA_LEVELS;
       ctx.stroke(paths[level]);
+    }
+  }
+
+  // Each pair of particles in the same or neighboring cells, the only ones
+  // close enough to link
+  private findNearbyPairs(visit: (a: number, b: number) => void) {
+    const { cells, cols, rows, linkDistance, particles } = this;
+
+    cells.forEach((cell) => {
+      cell.length = 0;
+    });
+    particles.forEach((particle, index) => {
+      const row = cellIndex(particle.y, rows, linkDistance);
+      const col = cellIndex(particle.x, cols, linkDistance);
+      cells[row * cols + col].push(index);
+    });
+
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const cell = cells[row * cols + col];
+
+        for (let i = 0; i < cell.length; i++) {
+          for (let j = i + 1; j < cell.length; j++) {
+            visit(cell[i], cell[j]);
+          }
+        }
+
+        for (const [dc, dr] of NEIGHBORS) {
+          const c = col + dc;
+          const r = row + dr;
+          if (c < 0 || c >= cols || r >= rows) {
+            continue;
+          }
+
+          for (const a of cell) {
+            for (const b of cells[r * cols + c]) {
+              visit(a, b);
+            }
+          }
+        }
+      }
     }
   }
 
