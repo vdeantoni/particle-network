@@ -146,7 +146,6 @@ export class ParticleNetwork {
   // Kept in viewport coordinates and mapped every frame, so the pointer stays
   // put when the page scrolls under a still mouse
   private client: { x: number; y: number } | null = null;
-  private hovered: EventTarget | null = null;
   // Added by the current press, and pinned to the pointer until release
   private held: Particle | null = null;
   // Everything the current press added, which a pointercancel takes back
@@ -204,7 +203,6 @@ export class ParticleNetwork {
     const { signal } = this.events;
     const track = (event: PointerEvent) => {
       this.client = { x: event.clientX, y: event.clientY };
-      this.hovered = event.target;
     };
     const untrack = () => {
       this.client = null;
@@ -346,7 +344,6 @@ export class ParticleNetwork {
 
   private press = (event: PointerEvent) => {
     this.client = { x: event.clientX, y: event.clientY };
-    this.hovered = event.target;
     const position = this.toCanvas(event.clientX, event.clientY);
     const count = Math.min(
       this.settings.spawnCount,
@@ -502,7 +499,7 @@ export class ParticleNetwork {
   };
 
   private spawnAtPointer(delta: number) {
-    const { pointer, particles } = this;
+    const { pointer, client, particles } = this;
     const {
       autoSpawn,
       spawnOnClick,
@@ -513,14 +510,15 @@ export class ParticleNetwork {
     } = this.settings;
     const previous = this.lastFired;
     this.lastFired = null;
-    // Without overlap a dragged particle covers the pointer, so a drag adds
-    // nothing more, not even along the path behind it
     if (
       !autoSpawn ||
       !spawnOnClick ||
       !pointer ||
-      isIgnored(this.hovered) ||
-      (this.held && !spawnOverlap)
+      // Without overlap a dragged particle covers the pointer, so a drag adds
+      // nothing more, not even along the path behind it
+      (this.held && !spawnOverlap) ||
+      // Looked up now, since the page can scroll under a still pointer
+      isIgnored(client && document.elementFromPoint(client.x, client.y))
     ) {
       return;
     }
