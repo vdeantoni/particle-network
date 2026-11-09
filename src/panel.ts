@@ -6,7 +6,7 @@ import {
   type ListBladeApi,
   type TextBladeApi,
 } from 'tweakpane';
-import { DEFAULT_SETTINGS, RANGES, type Settings } from './settings.js';
+import { DEFAULT_SETTINGS, RANGES, same, type Settings } from './settings.js';
 import type { ParticleNetwork } from './particle-network.js';
 import {
   BUILT_IN_PRESETS,
@@ -27,24 +27,16 @@ function presetValues(settings: Settings): Partial<Settings> {
   return Object.fromEntries(PRESET_KEYS.map((key) => [key, settings[key]]));
 }
 
-// Sliders round to their step counting from the value they started at, so
-// they write a preset's 0.4 back as 0.39999999999999997
-function same(a: unknown, b: unknown) {
-  return (
-    a === b ||
-    (typeof a === 'number' && typeof b === 'number' && Math.abs(a - b) < 1e-9)
-  );
-}
-
 interface PresetChoice {
-  // Prefixed, since a later version can add a built-in named like a saved preset
+  // Prefixed, since the page or a later version can add a built-in named like
+  // a saved preset
   key: string;
   name: string;
   builtIn: boolean;
   values: Settings;
 }
 
-const DEFAULT_PRESET = 'built-in:Default';
+const DEFAULT_PRESET = 'default';
 const savedKey = (name: string) => `saved:${name}`;
 
 // A number field for a range too wide for a slider to set small values. A max
@@ -108,8 +100,20 @@ function addRange(
   });
 }
 
+export interface PanelOptions {
+  /**
+   * Looks offered besides the page's own settings, applied over
+   * `DEFAULT_SETTINGS`. Defaults to `BUILT_IN_PRESETS`.
+   */
+  presets?: Record<string, Partial<Settings>>;
+}
+
 /** Builds the Tweakpane controls for `network` inside `container`. */
-export function createPanel(network: ParticleNetwork, container: HTMLElement) {
+export function createPanel(
+  network: ParticleNetwork,
+  container: HTMLElement,
+  { presets: builtIns = BUILT_IN_PRESETS }: PanelOptions = {},
+) {
   const { settings } = network;
   // Dragging a slider over the canvas would otherwise add a particle
   container.setAttribute('data-particle-network-ignore', '');
@@ -132,7 +136,7 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
       builtIn: true,
       values: network.defaults,
     },
-    ...Object.entries(BUILT_IN_PRESETS).map(([name, values]) => ({
+    ...Object.entries(builtIns).map(([name, values]) => ({
       key: `built-in:${name}`,
       name,
       builtIn: true,
@@ -151,12 +155,8 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
   const current = () => choices().find((choice) => choice.key === selected)!;
   const isModified = (choice: PresetChoice) =>
     PRESET_KEYS.some((key) => !same(settings[key], choice.values[key]));
-  // Re-reads the presets first, so it keeps the ones another tab saved
   const store = (change = (presets: SavedPreset[]) => presets) => {
-    saved = change(presetsKey ? loadPresets(presetsKey).presets : saved);
-    if (!exists(selected)) {
-      selected = DEFAULT_PRESET;
-    }
+    saved = change(saved);
     if (presetsKey) {
       savePresets(presetsKey, { selected, presets: saved });
     }
@@ -347,20 +347,14 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
       blade.disabled = !enabled();
     });
   };
-  let shownOptions = '';
   const syncPresets = () => {
     const all = choices();
     const chosen = all.find((choice) => choice.key === selected)!;
     const modified = isModified(chosen);
-    const options = all.map(({ key, name }) => ({
+    presetList.options = all.map(({ key, name }) => ({
       text: key === selected && modified ? `${name} (modified)` : name,
       value: key,
     }));
-    // Replacing the options rebuilds the dropdown, so only when they change
-    if (JSON.stringify(options) !== shownOptions) {
-      presetList.options = options;
-      shownOptions = JSON.stringify(options);
-    }
     presetList.value = selected;
 
     const name = typedName();
@@ -400,9 +394,7 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     const preset = { name: typedName(), settings: presetValues(settings) };
     selected = savedKey(preset.name);
     store((presets) =>
-      presets.some(({ name }) => name === previous)
-        ? presets.map((other) => (other.name === previous ? preset : other))
-        : [...presets, preset],
+      presets.map((other) => (other.name === previous ? preset : other)),
     );
     nameField.value = preset.name;
     syncPresets();
@@ -410,10 +402,7 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
   saveNewButton.on('click', () => {
     const preset = { name: typedName(), settings: presetValues(settings) };
     selected = savedKey(preset.name);
-    store((presets) => [
-      ...presets.filter(({ name }) => name !== preset.name),
-      preset,
-    ]);
+    store((presets) => [...presets, preset]);
     nameField.value = preset.name;
     syncPresets();
   });
@@ -428,6 +417,17 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     syncPresets();
   });
   revertButton.on('click', () => apply(current().values));
+  // Keeps the list current while another tab saves or deletes presets
+  const reload = (event: StorageEvent) => {
+    if (presetsKey && event.key === presetsKey) {
+      saved = loadPresets(presetsKey).presets;
+      if (!exists(selected)) {
+        selected = DEFAULT_PRESET;
+      }
+      syncPresets();
+    }
+  };
+  window.addEventListener('storage', reload);
 
   syncEnabled();
   syncPresets();
@@ -475,6 +475,7 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     /** Removes the controls and stops the FPS monitor. */
     destroy() {
       window.cancelAnimationFrame(frameRequest);
+      window.removeEventListener('storage', reload);
       unsubscribe();
       pane.dispose();
       container.removeAttribute('data-particle-network-ignore');
