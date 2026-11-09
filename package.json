@@ -1,6 +1,6 @@
 {
   "name": "@vdeantoni/particle-network",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Drifting particles linked to their neighbors on a canvas, with an optional settings panel and React components",
   "keywords": [
     "animation",
