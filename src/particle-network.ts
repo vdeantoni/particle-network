@@ -356,7 +356,9 @@ export class ParticleNetwork {
       event.button === 0 &&
       position &&
       !isIgnored(event.target) &&
-      count > 0
+      count > 0 &&
+      // Until the first frame measures the canvas, there's no area to place them in
+      this.width > 0
     ) {
       this.held = Particle.create(position.x, position.y);
       this.pressed = [this.held];
