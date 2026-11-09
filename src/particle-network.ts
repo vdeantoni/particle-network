@@ -81,6 +81,10 @@ interface PointerLink {
 const IGNORED =
   'a, button, input, select, textarea, label, [role="button"], [data-particle-network-ignore]';
 
+function isIgnored(target: EventTarget | null) {
+  return target instanceof Element && target.closest(IGNORED) !== null;
+}
+
 // A spread would copy undefined values over the defaults
 function definedValues(settings: Partial<Settings>) {
   return Object.fromEntries(
@@ -120,8 +124,11 @@ export class ParticleNetwork {
   // Kept in viewport coordinates and mapped every frame, so the pointer stays
   // put when the page scrolls under a still mouse
   private client: { x: number; y: number } | null = null;
+  private hovered: EventTarget | null = null;
   // Added by the current press, and pinned to the pointer until release
   private held: Particle | null = null;
+  // Particles owed by autoSpawn, up to one
+  private spawnDue = 0;
   private reducedMotion: MediaQueryList | null;
   private observer: IntersectionObserver;
   private events = new AbortController();
@@ -170,6 +177,7 @@ export class ParticleNetwork {
     const { signal } = this.events;
     const track = (event: PointerEvent) => {
       this.client = { x: event.clientX, y: event.clientY };
+      this.hovered = event.target;
     };
     const untrack = () => {
       this.client = null;
@@ -298,15 +306,14 @@ export class ParticleNetwork {
 
   private press = (event: PointerEvent) => {
     this.client = { x: event.clientX, y: event.clientY };
+    this.hovered = event.target;
     const position = this.toCanvas(event.clientX, event.clientY);
-    const ignored =
-      event.target instanceof Element && event.target.closest(IGNORED);
     if (
       this.settings.spawnOnClick &&
       event.isPrimary &&
       event.button === 0 &&
       position &&
-      !ignored
+      !isIgnored(event.target)
     ) {
       this.held = Particle.create(position.x, position.y);
       this.particles.push(this.held);
@@ -406,6 +413,7 @@ export class ParticleNetwork {
       this.held.x = this.pointer.x;
       this.held.y = this.pointer.y;
     }
+    this.spawnAtPointer(delta);
 
     ctx.globalCompositeOperation = settings.additive
       ? 'lighter'
@@ -417,6 +425,30 @@ export class ParticleNetwork {
 
     this.frameRequest = window.requestAnimationFrame(this.loop);
   };
+
+  private spawnAtPointer(delta: number) {
+    const { pointer, particles } = this;
+    const { autoSpawn, spawnRate, minRadius, maxRadius } = this.settings;
+    if (!autoSpawn || !pointer || isIgnored(this.hovered)) {
+      return;
+    }
+
+    // Capped so time spent blocked doesn't come out later as a burst
+    this.spawnDue = Math.min(
+      1,
+      this.spawnDue + (delta * FRAME_MS * spawnRate) / 1000,
+    );
+    // Closer than this, the new particle could overlap one already there
+    const spacing = 2 * Math.max(minRadius, maxRadius);
+    if (
+      this.spawnDue < 1 ||
+      particles.some((particle) => particle.distance(pointer) < spacing)
+    ) {
+      return;
+    }
+    particles.push(Particle.create(pointer.x, pointer.y));
+    this.spawnDue -= 1;
+  }
 
   private applyPointerForce(delta: number) {
     const { pointer } = this;

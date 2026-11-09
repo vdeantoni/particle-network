@@ -148,6 +148,8 @@ Colors are hex strings like `'#4d7cff'`, which the panel's color pickers need.
 | `pointerLinks`           | `true`       | Links the pointer to nearby particles.                                                                                 |
 | `pointerTriangles`       | `false`      | Fills triangles between the pointer and pairs of linked particles.                                                     |
 | `spawnOnClick`           | `true`       | Pressing adds a particle, which follows the pointer until release.                                                     |
+| `autoSpawn`              | `false`      | Adds particles at the pointer while it's over the canvas, unless one already covers the spot.                          |
+| `spawnRate`              | `10`         | Particles per second that `autoSpawn` adds.                                                                            |
 | `flashlight`             | `true`       | Brightens links and triangles near the pointer.                                                                        |
 | `flashlightRadius`       | `200`        | Reach of the flashlight, in px.                                                                                        |
 | `flashlightBoost`        | `3`          | Opacity at the pointer is multiplied by 1 + this.                                                                      |
