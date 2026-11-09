@@ -44,6 +44,8 @@ panel.destroy();
 
 The panel is built with [Tweakpane](https://tweakpane.github.io/docs/), which is 31 KB gzipped against 6.4 KB for the animation. It lives in its own entry point, so it's only bundled when you import it. Showing, hiding and positioning its container is up to you.
 
+The dropdown at the top of the panel switches between presets. Default is the page's own settings. The built-in Classic, Mosaic, Constellation, Web and Paint follow, then the visitor's own presets. Save as new saves the current settings under the name in the field. With one of the visitor's presets selected, Save overwrites it with the current settings and name, and Delete removes it. Built-in presets can't be changed, only saved as new ones. Revert changes goes back to the selected preset. With a `storageKey`, the presets and the selection are saved in localStorage under `<storageKey>-presets`; without one, they last until the page reloads.
+
 ### React
 
 ```tsx
@@ -116,6 +118,8 @@ The animation pauses while the canvas is off screen. A canvas fixed behind the p
 | `active`             | Set it to `false` to stop the animation, and back to `true` to resume it.                                |
 | `set(settings)`      | Changes settings and makes them what `reset()` returns to.                                               |
 | `reset()`            | Drops changes made in the panel.                                                                         |
+| `defaults`           | A copy of what `reset()` returns to: the defaults with the `settings` option and `set()` calls applied.  |
+| `storageKey`         | The `storageKey` option.                                                                                 |
 | `randomize()`        | Replaces every particle with a new random one.                                                           |
 | `count()`            | Returns `{ total, added }`: how many particles exist, and how many of them clicks and `autoSpawn` added. |
 | `onChange(listener)` | Calls `listener` after `set()` or `reset()`. Returns a function that unsubscribes.                       |
