@@ -96,14 +96,16 @@ const BOOLEAN_KEYS = [
 ] as const;
 
 export function loadSettings(key: string): Partial<Settings> {
-  const settings: Partial<Settings> = {};
-
-  let stored: unknown;
   try {
-    stored = JSON.parse(localStorage.getItem(key) ?? '{}');
+    return parseSettings(JSON.parse(localStorage.getItem(key) ?? '{}'));
   } catch {
-    return settings;
+    return {};
   }
+}
+
+/** Keeps the valid settings in stored JSON, with numbers clamped to `RANGES`. */
+export function parseSettings(stored: unknown): Partial<Settings> {
+  const settings: Partial<Settings> = {};
   if (typeof stored !== 'object' || stored === null) {
     return settings;
   }

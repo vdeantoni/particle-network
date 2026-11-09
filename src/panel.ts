@@ -1,10 +1,51 @@
 import type { GraphLogMonitorBindingApi } from '@tweakpane/core';
-import { Pane, type BladeApi, type FolderApi } from 'tweakpane';
-import { RANGES, type Settings } from './settings.js';
+import {
+  Pane,
+  type BladeApi,
+  type FolderApi,
+  type ListBladeApi,
+  type TextBladeApi,
+} from 'tweakpane';
+import { DEFAULT_SETTINGS, RANGES, type Settings } from './settings.js';
 import type { ParticleNetwork } from './particle-network.js';
+import {
+  BUILT_IN_PRESETS,
+  loadPresets,
+  savePresets,
+  type SavedPreset,
+} from './presets.js';
 
 // The particle total graph keeps 15 s at one point per 500 ms
 const HISTORY_POINTS = 30;
+
+// A preset sets everything but pause
+const PRESET_KEYS = (
+  Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]
+).filter((key) => key !== 'paused');
+
+function presetValues(settings: Settings): Partial<Settings> {
+  return Object.fromEntries(PRESET_KEYS.map((key) => [key, settings[key]]));
+}
+
+// Sliders round to their step counting from the value they started at, so
+// they write a preset's 0.4 back as 0.39999999999999997
+function same(a: unknown, b: unknown) {
+  return (
+    a === b ||
+    (typeof a === 'number' && typeof b === 'number' && Math.abs(a - b) < 1e-9)
+  );
+}
+
+interface PresetChoice {
+  // Prefixed, since a later version can add a built-in named like a saved preset
+  key: string;
+  name: string;
+  builtIn: boolean;
+  values: Settings;
+}
+
+const DEFAULT_PRESET = 'built-in:Default';
+const savedKey = (name: string) => `saved:${name}`;
 
 // A number field for a range too wide for a slider to set small values. A max
 // would draw a slider, so the field enforces it itself.
@@ -80,6 +121,67 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
   const enabledWhile = (enabled: () => boolean, ...blades: BladeApi[]) => {
     blades.forEach((blade) => dependents.push([blade, enabled]));
   };
+
+  const presetsKey = network.storageKey && `${network.storageKey}-presets`;
+  const stored = presetsKey ? loadPresets(presetsKey) : { presets: [] };
+  let saved = stored.presets;
+  const choices = (): PresetChoice[] => [
+    {
+      key: DEFAULT_PRESET,
+      name: 'Default',
+      builtIn: true,
+      values: network.defaults,
+    },
+    ...Object.entries(BUILT_IN_PRESETS).map(([name, values]) => ({
+      key: `built-in:${name}`,
+      name,
+      builtIn: true,
+      values: { ...DEFAULT_SETTINGS, ...values },
+    })),
+    ...saved.map(({ name, settings }) => ({
+      key: savedKey(name),
+      name,
+      builtIn: false,
+      values: { ...DEFAULT_SETTINGS, ...settings },
+    })),
+  ];
+  const exists = (key?: string) =>
+    choices().some((choice) => choice.key === key);
+  let selected = exists(stored.selected) ? stored.selected! : DEFAULT_PRESET;
+  const current = () => choices().find((choice) => choice.key === selected)!;
+  const isModified = (choice: PresetChoice) =>
+    PRESET_KEYS.some((key) => !same(settings[key], choice.values[key]));
+  // Re-reads the presets first, so it keeps the ones another tab saved
+  const store = (change = (presets: SavedPreset[]) => presets) => {
+    saved = change(presetsKey ? loadPresets(presetsKey).presets : saved);
+    if (!exists(selected)) {
+      selected = DEFAULT_PRESET;
+    }
+    if (presetsKey) {
+      savePresets(presetsKey, { selected, presets: saved });
+    }
+  };
+
+  const presetList = pane.addBlade({
+    view: 'list',
+    label: 'preset',
+    options: [{ text: current().name, value: selected }],
+    value: selected,
+  }) as ListBladeApi<string>;
+  const nameField = pane.addBlade({
+    view: 'text',
+    label: 'name',
+    parse: (value: string) => value.trim(),
+    value: current().name,
+  }) as TextBladeApi<string>;
+  // The field only commits on blur or Enter, too late to enable the buttons
+  const nameInput = nameField.element.querySelector('input')!;
+  const typedName = () => nameInput.value.trim();
+  const saveButton = pane.addButton({ title: 'Save' });
+  const saveNewButton = pane.addButton({ title: 'Save as new' });
+  const deleteButton = pane.addButton({ title: 'Delete' });
+  const revertButton = pane.addButton({ title: 'Revert changes' });
+  pane.addBlade({ view: 'separator' });
 
   pane.addBinding(settings, 'paused', { label: 'pause' });
   pane
@@ -201,10 +303,6 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     background.addBinding(settings, 'backgroundOuter', { label: 'edges' }),
   );
 
-  pane
-    .addButton({ title: 'Reset to defaults' })
-    .on('click', () => network.reset());
-
   const statsFolder = pane.addFolder({ title: 'Stats' });
   const fps = statsFolder.addBinding(stats, 'fps', {
     readonly: true,
@@ -227,7 +325,10 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     label: 'history',
   }) as GraphLogMonitorBindingApi;
   const recentTotals: number[] = [];
-  const monitors = new Set<unknown>([
+  // Monitors emit change on every poll, and the preset controls handle their own
+  const notSettings = new Set<unknown>([
+    presetList,
+    nameField,
     fps,
     totalRow,
     history,
@@ -246,13 +347,96 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
       blade.disabled = !enabled();
     });
   };
+  let shownOptions = '';
+  const syncPresets = () => {
+    const all = choices();
+    const chosen = all.find((choice) => choice.key === selected)!;
+    const modified = isModified(chosen);
+    const options = all.map(({ key, name }) => ({
+      text: key === selected && modified ? `${name} (modified)` : name,
+      value: key,
+    }));
+    // Replacing the options rebuilds the dropdown, so only when they change
+    if (JSON.stringify(options) !== shownOptions) {
+      presetList.options = options;
+      shownOptions = JSON.stringify(options);
+    }
+    presetList.value = selected;
+
+    const name = typedName();
+    const taken = all.some(
+      (choice) => choice.name === name && choice !== chosen,
+    );
+    saveButton.disabled =
+      chosen.builtIn ||
+      name === '' ||
+      taken ||
+      (!modified && name === chosen.name);
+    saveNewButton.disabled = name === '' || taken || name === chosen.name;
+    deleteButton.disabled = chosen.builtIn;
+    revertButton.disabled = !modified;
+  };
+  const apply = (values: Settings) => {
+    Object.assign(settings, presetValues(values));
+    network.save();
+    pane.refresh();
+    syncEnabled();
+    syncPresets();
+  };
+
+  presetList.on('change', ({ value }) => {
+    // Also fires when syncPresets() sets the value
+    if (value === selected) {
+      return;
+    }
+    selected = value;
+    store();
+    nameField.value = current().name;
+    apply(current().values);
+  });
+  nameInput.addEventListener('input', syncPresets);
+  saveButton.on('click', () => {
+    const previous = current().name;
+    const preset = { name: typedName(), settings: presetValues(settings) };
+    selected = savedKey(preset.name);
+    store((presets) =>
+      presets.some(({ name }) => name === previous)
+        ? presets.map((other) => (other.name === previous ? preset : other))
+        : [...presets, preset],
+    );
+    nameField.value = preset.name;
+    syncPresets();
+  });
+  saveNewButton.on('click', () => {
+    const preset = { name: typedName(), settings: presetValues(settings) };
+    selected = savedKey(preset.name);
+    store((presets) => [
+      ...presets.filter(({ name }) => name !== preset.name),
+      preset,
+    ]);
+    nameField.value = preset.name;
+    syncPresets();
+  });
+  deleteButton.on('click', () => {
+    const { name } = current();
+    if (!window.confirm(`Delete the preset "${name}"?`)) {
+      return;
+    }
+    selected = DEFAULT_PRESET;
+    store((presets) => presets.filter((preset) => preset.name !== name));
+    nameField.value = current().name;
+    syncPresets();
+  });
+  revertButton.on('click', () => apply(current().values));
+
   syncEnabled();
+  syncPresets();
   pane.on('change', (event) => {
-    // Monitors emit change on every poll, not only on user input
-    if (monitors.has(event.target)) {
+    if (notSettings.has(event.target)) {
       return;
     }
     syncEnabled();
+    syncPresets();
     if (event.last) {
       network.save();
     }
@@ -260,6 +444,7 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
   const unsubscribe = network.onChange(() => {
     pane.refresh();
     syncEnabled();
+    syncPresets();
   });
 
   let frames = 0;
