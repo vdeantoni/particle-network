@@ -1,6 +1,29 @@
-import { Pane } from 'tweakpane';
-import { RANGES } from './settings.js';
+import { Pane, type FolderApi } from 'tweakpane';
+import { RANGES, type Settings } from './settings.js';
 import type { ParticleNetwork } from './particle-network.js';
+
+// A number field for milliseconds up to a minute. A max would draw a slider,
+// too coarse below a second, so the field enforces it itself.
+function addDurationField(
+  folder: FolderApi,
+  settings: Settings,
+  key: 'spawnLifetime' | 'deathDuration',
+  label: string,
+) {
+  const { max, ...range } = RANGES[key];
+  const field = folder.addBinding(settings, key, {
+    ...range,
+    keyScale: 100,
+    pointerScale: 10,
+    label,
+  });
+  field.on('change', ({ value }) => {
+    if (value > max) {
+      settings[key] = max;
+      field.refresh();
+    }
+  });
+}
 
 /** Builds the Tweakpane controls for `network` inside `container`. */
 export function createPanel(network: ParticleNetwork, container: HTMLElement) {
@@ -109,24 +132,8 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     label: 'fire every ms',
   });
   mouse.addBinding(settings, 'spawnOverlap', { label: 'fire on same spot' });
-  // A max would draw a slider, too coarse below a second, so it's enforced here
-  const { max: maxLifetime, ...lifetimeRange } = RANGES.spawnLifetime;
-  const lifetime = mouse.addBinding(settings, 'spawnLifetime', {
-    ...lifetimeRange,
-    keyScale: 100,
-    pointerScale: 10,
-    label: 'lifetime ms',
-  });
-  lifetime.on('change', ({ value }) => {
-    if (value > maxLifetime) {
-      settings.spawnLifetime = maxLifetime;
-      lifetime.refresh();
-    }
-  });
-  mouse.addBinding(settings, 'deathDuration', {
-    ...RANGES.deathDuration,
-    label: 'fade out ms',
-  });
+  addDurationField(mouse, settings, 'spawnLifetime', 'lifetime ms');
+  addDurationField(mouse, settings, 'deathDuration', 'fade out ms');
 
   const flashlight = pane.addFolder({ title: 'Flashlight' });
   flashlight.addBinding(settings, 'flashlight', { label: 'on' });
