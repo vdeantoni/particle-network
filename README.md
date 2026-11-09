@@ -110,15 +110,16 @@ The animation pauses while the canvas is off screen. A canvas fixed behind the p
 
 ## Methods
 
-| Method               | Description                                                                        |
-| -------------------- | ---------------------------------------------------------------------------------- |
-| `settings`           | The live settings object, read every frame.                                        |
-| `active`             | Set it to `false` to stop the animation, and back to `true` to resume it.          |
-| `set(settings)`      | Changes settings and makes them what `reset()` returns to.                         |
-| `reset()`            | Drops changes made in the panel.                                                   |
-| `randomize()`        | Replaces every particle with a new random one.                                     |
-| `onChange(listener)` | Calls `listener` after `set()` or `reset()`. Returns a function that unsubscribes. |
-| `destroy()`          | Stops the animation and removes its event listeners.                               |
+| Method               | Description                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------- |
+| `settings`           | The live settings object, read every frame.                                                              |
+| `active`             | Set it to `false` to stop the animation, and back to `true` to resume it.                                |
+| `set(settings)`      | Changes settings and makes them what `reset()` returns to.                                               |
+| `reset()`            | Drops changes made in the panel.                                                                         |
+| `randomize()`        | Replaces every particle with a new random one.                                                           |
+| `count()`            | Returns `{ total, added }`: how many particles exist, and how many of them clicks and `autoSpawn` added. |
+| `onChange(listener)` | Calls `listener` after `set()` or `reset()`. Returns a function that unsubscribes.                       |
+| `destroy()`          | Stops the animation and removes its event listeners.                                                     |
 
 ## Settings
 
