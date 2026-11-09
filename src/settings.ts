@@ -59,7 +59,7 @@ export const RANGES = {
   forceRadius: { min: 50, max: 500, step: 10 },
   forceStrength: { min: 0, max: 0.5, step: 0.01 },
   spawnInterval: { min: 10, max: 1000, step: 10 },
-  spawnLifetime: { min: 100, max: 60000, step: 100 },
+  spawnLifetime: { min: 100, max: 60000, step: 10 },
   flashlightRadius: { min: 50, max: 600, step: 10 },
   flashlightBoost: { min: 0, max: 10, step: 0.1 },
 } satisfies Partial<

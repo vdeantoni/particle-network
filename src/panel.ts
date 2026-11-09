@@ -104,9 +104,19 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     ...RANGES.spawnInterval,
     label: 'fire every ms',
   });
-  mouse.addBinding(settings, 'spawnLifetime', {
-    ...RANGES.spawnLifetime,
+  // A max would draw a slider, too coarse below a second, so it's enforced here
+  const { max: maxLifetime, ...lifetimeRange } = RANGES.spawnLifetime;
+  const lifetime = mouse.addBinding(settings, 'spawnLifetime', {
+    ...lifetimeRange,
+    keyScale: 100,
+    pointerScale: 10,
     label: 'lifetime ms',
+  });
+  lifetime.on('change', ({ value }) => {
+    if (value > maxLifetime) {
+      settings.spawnLifetime = maxLifetime;
+      lifetime.refresh();
+    }
   });
 
   const flashlight = pane.addFolder({ title: 'Flashlight' });
