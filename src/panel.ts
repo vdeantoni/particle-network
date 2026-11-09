@@ -1,6 +1,10 @@
+import type { GraphLogMonitorBindingApi } from '@tweakpane/core';
 import { Pane, type FolderApi } from 'tweakpane';
 import { RANGES, type Settings } from './settings.js';
 import type { ParticleNetwork } from './particle-network.js';
+
+// The particle total graph keeps 15 s at one point per 500 ms
+const HISTORY_POINTS = 30;
 
 // A number field for milliseconds up to a minute. A max would draw a slider,
 // too coarse below a second, so the field enforces it itself.
@@ -47,9 +51,21 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
 
   const count = pane.addFolder({ title: 'Particle count' });
   const whole = { readonly: true, format: (value: number) => value.toFixed(0) };
+  const totalRow = count.addBinding(stats, 'total', whole);
+  // Polled as often as the counts update, so its points match recentTotals
+  const history = count.addBinding(stats, 'total', {
+    ...whole,
+    view: 'graph',
+    interval: 500,
+    bufferSize: HISTORY_POINTS,
+    min: 0,
+    label: 'history',
+  }) as GraphLogMonitorBindingApi;
+  const recentTotals: number[] = [];
   const monitors = new Set<unknown>([
     fps,
-    count.addBinding(stats, 'total', whole),
+    totalRow,
+    history,
     count.addBinding(stats, 'fromDensity', { ...whole, label: 'from density' }),
     count.addBinding(stats, 'fromMouse', { ...whole, label: 'from mouse' }),
   ]);
@@ -183,6 +199,12 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
       stats.total = total;
       stats.fromDensity = total - added;
       stats.fromMouse = added;
+      recentTotals.push(total);
+      if (recentTotals.length > HISTORY_POINTS) {
+        recentTotals.shift();
+      }
+      // Fits the graph to its visible peak, so it shrinks once particles expire
+      history.max = Math.max(1, ...recentTotals) * 1.25;
       frames = 0;
       since = now;
     }
