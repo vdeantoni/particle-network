@@ -34,11 +34,26 @@ function cellIndex(value: number, count: number, cellSize: number) {
   return Math.min(count - 1, Math.max(0, index));
 }
 
-function levelAt(distance: number, maxDistance: number, falloff: number) {
+// A min above the max counts as the max, so the max always caps
+function within(min: number, max: number, fraction: number) {
+  const low = Math.min(min, max);
+  return low + fraction * (max - low);
+}
+
+// Triangles are shaded by these levels too, so a dying particle's fills fade
+// with its lines
+function levelAt(
+  distance: number,
+  maxDistance: number,
+  falloff: number,
+  vitality: number,
+) {
   if (distance >= maxDistance) {
     return 0;
   }
-  return Math.round((1 - distance / maxDistance) ** falloff * ALPHA_LEVELS);
+  return Math.round(
+    (1 - distance / maxDistance) ** falloff * vitality * ALPHA_LEVELS,
+  );
 }
 
 function linkLevel(
@@ -47,7 +62,12 @@ function linkLevel(
   maxDistance: number,
   falloff: number,
 ) {
-  return levelAt(particle.distance(other), maxDistance, falloff);
+  return levelAt(
+    particle.distance(other),
+    maxDistance,
+    falloff,
+    Math.min(particle.vitality, other.vitality),
+  );
 }
 
 interface TriangleFade {
@@ -71,6 +91,14 @@ type TriangleVisitor = (
 const INDEX_LIMIT = 2 ** 17;
 // Stands in for the pointer as a triangle vertex; no particle index reaches it
 const POINTER_INDEX = INDEX_LIMIT - 1;
+// The list never grows past POINTER_INDEX, so every index stays below it
+const MAX_PARTICLES = POINTER_INDEX;
+// Density counts particles per this many px²
+const DENSITY_AREA = 5000;
+
+function triangleKey(a: number, b: number, c: number) {
+  return (a * INDEX_LIMIT + b) * INDEX_LIMIT + c;
+}
 
 interface PointerLink {
   index: number;
@@ -81,11 +109,36 @@ interface PointerLink {
 const IGNORED =
   'a, button, input, select, textarea, label, [role="button"], [data-particle-network-ignore]';
 
+function isIgnored(target: EventTarget | null) {
+  return target instanceof Element && target.closest(IGNORED) !== null;
+}
+
 // A spread would copy undefined values over the defaults
 function definedValues(settings: Partial<Settings>) {
   return Object.fromEntries(
     Object.entries(settings).filter(([, value]) => value !== undefined),
   ) as Partial<Settings>;
+}
+
+const RANGE_ENDS = [
+  ['minSpeed', 'maxSpeed'],
+  ['minRadius', 'maxRadius'],
+] as const;
+
+// One end set past the other pulls it along, as the panel does, so the end
+// that was set takes effect instead of being capped by within()
+function pullRanges(values: Partial<Settings>, current: Settings) {
+  const pulled = { ...values };
+  for (const [low, high] of RANGE_ENDS) {
+    const min = values[low];
+    const max = values[high];
+    if (min !== undefined && max === undefined && min > current[high]) {
+      pulled[high] = min;
+    } else if (max !== undefined && min === undefined && max < current[low]) {
+      pulled[low] = max;
+    }
+  }
+  return pulled;
 }
 
 export interface ParticleNetworkOptions {
@@ -122,6 +175,13 @@ export class ParticleNetwork {
   private client: { x: number; y: number } | null = null;
   // Added by the current press, and pinned to the pointer until release
   private held: Particle | null = null;
+  // Everything the current press added, which a pointercancel takes back
+  private pressed: Particle[] = [];
+  // Particles owed by autoSpawn, below one between frames
+  private spawnDue = 0;
+  // Where the pointer was when auto-fire last ran, to spread particles along
+  // its path since
+  private lastFired: { x: number; y: number } | null = null;
   private reducedMotion: MediaQueryList | null;
   private observer: IntersectionObserver;
   private events = new AbortController();
@@ -152,11 +212,11 @@ export class ParticleNetwork {
     this.ctx = canvas.getContext('2d')!;
     this.base = {
       ...DEFAULT_SETTINGS,
-      ...definedValues(options.settings ?? {}),
+      ...pullRanges(definedValues(options.settings ?? {}), DEFAULT_SETTINGS),
     };
     this.storageKey = storageKey;
     const stored = storageKey ? loadSettings(storageKey) : {};
-    this.settings = { ...this.base, ...stored };
+    this.settings = { ...this.base, ...pullRanges(stored, this.base) };
     this.reducedMotion = respectReducedMotion
       ? window.matchMedia('(prefers-reduced-motion: reduce)')
       : null;
@@ -175,17 +235,20 @@ export class ParticleNetwork {
       this.client = null;
     };
     const release = () => {
-      this.held = null;
-    };
-    // The browser took the gesture over, usually to scroll, so the press
-    // wasn't meant to add a particle
-    const cancel = () => {
-      this.client = null;
-      const index = this.held ? this.particles.indexOf(this.held) : -1;
-      if (index >= 0) {
-        this.particles.splice(index, 1);
+      if (this.held) {
+        this.held.placedAt = performance.now();
       }
       this.held = null;
+      this.pressed = [];
+    };
+    // The browser took the gesture over, usually to scroll, so the press
+    // wasn't meant to add particles
+    const cancel = () => {
+      this.client = null;
+      const pressed = new Set(this.pressed);
+      this.remove((particle) => pressed.has(particle));
+      this.held = null;
+      this.pressed = [];
     };
     target.addEventListener('pointermove', track, { signal });
     target.addEventListener('pointerdown', this.press, { signal });
@@ -227,8 +290,8 @@ export class ParticleNetwork {
   /** Changes settings and makes them what `reset()` returns to. */
   public set(settings: Partial<Settings>) {
     const values = definedValues(settings);
-    Object.assign(this.base, values);
-    Object.assign(this.settings, values);
+    Object.assign(this.base, pullRanges(values, this.base));
+    Object.assign(this.settings, pullRanges(values, this.settings));
     this.save();
     this.notify();
   }
@@ -260,6 +323,16 @@ export class ParticleNetwork {
     this.fades.clear();
     this.populate();
   }
+
+  /** How many particles exist, and how many of them clicks and auto-fire added. */
+  public count() {
+    const added = this.particles.filter(this.isAdded).length;
+    return { total: this.particles.length, added };
+  }
+
+  // Clicks and auto-fire added it, so it leaves when its lifetime ends
+  private isAdded = (particle: Particle) =>
+    particle.placedAt !== undefined || particle === this.held;
 
   /** Stops the animation and removes its event listeners. */
   public destroy() {
@@ -299,17 +372,38 @@ export class ParticleNetwork {
   private press = (event: PointerEvent) => {
     this.client = { x: event.clientX, y: event.clientY };
     const position = this.toCanvas(event.clientX, event.clientY);
-    const ignored =
-      event.target instanceof Element && event.target.closest(IGNORED);
+    const count = Math.min(
+      this.settings.spawnCount,
+      MAX_PARTICLES - this.particles.length,
+    );
     if (
       this.settings.spawnOnClick &&
       event.isPrimary &&
       event.button === 0 &&
       position &&
-      !ignored
+      !isIgnored(event.target) &&
+      count > 0 &&
+      // Until the first frame measures the canvas, there's no area to place them in
+      this.width > 0
     ) {
       this.held = Particle.create(position.x, position.y);
+      this.pressed = [this.held];
       this.particles.push(this.held);
+
+      const { width, height, linkDistance: margin } = this;
+      const radius = this.settings.spawnSpread;
+      const now = performance.now();
+      for (let i = 1; i < count; i++) {
+        const angle = Math.random() * 2 * Math.PI;
+        const distance = radius * Math.sqrt(Math.random());
+        const particle = Particle.create(
+          wrap(position.x + distance * Math.cos(angle), width, margin),
+          wrap(position.y + distance * Math.sin(angle), height, margin),
+        );
+        particle.placedAt = now;
+        this.pressed.push(particle);
+        this.particles.push(particle);
+      }
     }
   };
 
@@ -356,14 +450,24 @@ export class ParticleNetwork {
     this.populate();
   }
 
+  // Tops up or trims the density's own particles; added ones stay until their
+  // lifetime ends
   private populate() {
-    const { width, height, linkDistance: margin, density } = this;
+    const { width, height, linkDistance: margin, density, particles } = this;
     const population = Math.round(
-      ((width + 2 * margin) * (height + 2 * margin)) / (5000 / density),
+      ((width + 2 * margin) * (height + 2 * margin)) / (DENSITY_AREA / density),
     );
-    this.particles.length = Math.min(this.particles.length, population);
-    while (this.particles.length < population) {
-      this.particles.push(
+    const own = particles.filter((particle) => !this.isAdded(particle));
+    if (own.length > population) {
+      const extra = new Set(own.slice(population));
+      this.remove((particle) => extra.has(particle));
+    }
+    for (
+      let i = own.length;
+      i < population && particles.length < MAX_PARTICLES;
+      i++
+    ) {
+      particles.push(
         Particle.create(
           Math.random() * (width + 2 * margin) - margin,
           Math.random() * (height + 2 * margin) - margin,
@@ -382,6 +486,7 @@ export class ParticleNetwork {
     const { ctx, settings, client } = this;
 
     this.fit();
+    this.expire(timestamp);
     this.pointer = client && this.toCanvas(client.x, client.y);
 
     ctx.globalCompositeOperation = 'source-over';
@@ -394,10 +499,11 @@ export class ParticleNetwork {
       const pushDelta = Math.min(delta, 4);
       this.applyPointerForce(pushDelta);
 
-      const step = delta * settings.maxSpeed;
+      const { minSpeed, maxSpeed } = settings;
       const pushDecay = PUSH_DECAY ** pushDelta;
       this.particles.forEach((particle) => {
-        particle.move(step, pushDelta, pushDecay);
+        const speed = within(minSpeed, maxSpeed, particle.pace);
+        particle.move(delta * speed, pushDelta, pushDecay);
         particle.x = wrap(particle.x, this.width, this.linkDistance);
         particle.y = wrap(particle.y, this.height, this.linkDistance);
       });
@@ -406,6 +512,7 @@ export class ParticleNetwork {
       this.held.x = this.pointer.x;
       this.held.y = this.pointer.y;
     }
+    this.spawnAtPointer(delta);
 
     ctx.globalCompositeOperation = settings.additive
       ? 'lighter'
@@ -417,6 +524,100 @@ export class ParticleNetwork {
 
     this.frameRequest = window.requestAnimationFrame(this.loop);
   };
+
+  private spawnAtPointer(delta: number) {
+    const { pointer, client, particles } = this;
+    const { autoSpawn, spawnOnClick, spawnRate, spawnOverlap, maxRadius } =
+      this.settings;
+    const previous = this.lastFired;
+    this.lastFired = null;
+    if (
+      !autoSpawn ||
+      !spawnOnClick ||
+      !pointer ||
+      // Without overlap a dragged particle covers the pointer, so a drag adds
+      // nothing more, not even along the path behind it
+      (this.held && !spawnOverlap) ||
+      // Looked up now, since the page can scroll under a still pointer
+      isIgnored(client && document.elementFromPoint(client.x, client.y))
+    ) {
+      return;
+    }
+    this.lastFired = pointer;
+    const from = previous ?? pointer;
+
+    // Capped like the push, so a long frame doesn't come out as a burst
+    this.spawnDue += (Math.min(delta, 4) * FRAME_MS * spawnRate) / 1000;
+    const count = Math.floor(this.spawnDue);
+    this.spawnDue -= count;
+    // Closer than this, the new particle could overlap one already there
+    const spacing = 2 * maxRadius;
+    // Spread along the pointer's path since the last frame, so a fast stroke
+    // leaves an even trail
+    for (let i = 1; i <= count && particles.length < MAX_PARTICLES; i++) {
+      const x = from.x + ((pointer.x - from.x) * i) / count;
+      const y = from.y + ((pointer.y - from.y) * i) / count;
+      if (
+        spawnOverlap ||
+        !particles.some((particle) => particle.distance({ x, y }) < spacing)
+      ) {
+        const particle = Particle.create(x, y);
+        particle.placedAt = performance.now();
+        particles.push(particle);
+      }
+    }
+  }
+
+  // Fades out particles the pointer placed once they outlive spawnLifetime,
+  // then removes them
+  private expire(now: number) {
+    const { particles } = this;
+    const { spawnLifetime, deathDuration } = this.settings;
+    let dead = false;
+    particles.forEach((particle) => {
+      if (particle.placedAt === undefined) {
+        return;
+      }
+      const dying = now - particle.placedAt - spawnLifetime;
+      particle.vitality =
+        dying <= 0 ? 1 : deathDuration > 0 ? 1 - dying / deathDuration : 0;
+      dead ||= particle.vitality <= 0;
+    });
+    if (dead) {
+      this.remove((particle) => particle.vitality <= 0);
+    }
+  }
+
+  // Fades are keyed by index, so they move down past each removed particle
+  private remove(removed: (particle: Particle) => boolean) {
+    const { particles } = this;
+    // Each particle's new index, or -1 once removed
+    const moved = new Int32Array(particles.length);
+    let kept = 0;
+    particles.forEach((particle, index) => {
+      if (removed(particle)) {
+        moved[index] = -1;
+      } else {
+        moved[index] = kept;
+        particles[kept++] = particle;
+      }
+    });
+    particles.length = kept;
+
+    const fades = new Map<number, TriangleFade>();
+    this.fades.forEach((fade) => {
+      const a = moved[fade.a];
+      const b = moved[fade.b];
+      const c = fade.c === POINTER_INDEX ? POINTER_INDEX : moved[fade.c];
+      if (a >= 0 && b >= 0 && c >= 0) {
+        fade.a = a;
+        fade.b = b;
+        fade.c = c;
+        fades.set(triangleKey(a, b, c), fade);
+      }
+    });
+    this.fades = fades;
+  }
 
   private applyPointerForce(delta: number) {
     const { pointer } = this;
@@ -497,15 +698,14 @@ export class ParticleNetwork {
   private drawParticles() {
     const { ctx } = this;
     const { minRadius, maxRadius, particleColor } = this.settings;
-    const largest = Math.max(minRadius, maxRadius);
-    if (largest === 0) {
+    if (maxRadius === 0) {
       return;
     }
 
     ctx.fillStyle = particleColor;
     this.particles.forEach((particle) => {
-      const radius = minRadius + particle.size * (maxRadius - minRadius);
-      ctx.globalAlpha = radius / largest;
+      const radius = within(minRadius, maxRadius, particle.size);
+      ctx.globalAlpha = (radius / maxRadius) * particle.vitality;
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, radius, 0, 2 * Math.PI);
       ctx.fill();
@@ -576,6 +776,7 @@ export class ParticleNetwork {
           particle.distance(pointer),
           linkDistance,
           falloff,
+          particle.vitality,
         );
         if (level > 0) {
           linked.push({ index, level });
@@ -665,7 +866,7 @@ export class ParticleNetwork {
     const show: TriangleVisitor = (a, b, c, ab, bc, ac) => {
       const level =
         triangleShade === 'weakest' ? Math.min(ab, bc, ac) : (ab + bc + ac) / 3;
-      const key = (a * INDEX_LIMIT + b) * INDEX_LIMIT + c;
+      const key = triangleKey(a, b, c);
       let fade = fades.get(key);
       if (!fade) {
         fade = { a, b, c, opacity: 0, frame };

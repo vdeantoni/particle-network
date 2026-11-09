@@ -110,15 +110,16 @@ The animation pauses while the canvas is off screen. A canvas fixed behind the p
 
 ## Methods
 
-| Method               | Description                                                                        |
-| -------------------- | ---------------------------------------------------------------------------------- |
-| `settings`           | The live settings object, read every frame.                                        |
-| `active`             | Set it to `false` to stop the animation, and back to `true` to resume it.          |
-| `set(settings)`      | Changes settings and makes them what `reset()` returns to.                         |
-| `reset()`            | Drops changes made in the panel.                                                   |
-| `randomize()`        | Replaces every particle with a new random one.                                     |
-| `onChange(listener)` | Calls `listener` after `set()` or `reset()`. Returns a function that unsubscribes. |
-| `destroy()`          | Stops the animation and removes its event listeners.                               |
+| Method               | Description                                                                                              |
+| -------------------- | -------------------------------------------------------------------------------------------------------- |
+| `settings`           | The live settings object, read every frame.                                                              |
+| `active`             | Set it to `false` to stop the animation, and back to `true` to resume it.                                |
+| `set(settings)`      | Changes settings and makes them what `reset()` returns to.                                               |
+| `reset()`            | Drops changes made in the panel.                                                                         |
+| `randomize()`        | Replaces every particle with a new random one.                                                           |
+| `count()`            | Returns `{ total, added }`: how many particles exist, and how many of them clicks and `autoSpawn` added. |
+| `onChange(listener)` | Calls `listener` after `set()` or `reset()`. Returns a function that unsubscribes.                       |
+| `destroy()`          | Stops the animation and removes its event listeners.                                                     |
 
 ## Settings
 
@@ -128,8 +129,8 @@ Colors are hex strings like `'#4d7cff'`, which the panel's color pickers need.
 | ------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
 | `paused`                 | `false`      | Stops the particles. Links and pointer effects keep updating.                                                          |
 | `density`                | `1`          | Particles per 5,000 px² of canvas.                                                                                     |
-| `maxSpeed`               | `0.15`       | Fastest drift, in px per 1/60 s.                                                                                       |
-| `minRadius`, `maxRadius` | `0.5`, `1.5` | Range of particle radii, in px. `0` for both hides the particles, which still move and link.                           |
+| `minSpeed`, `maxSpeed`   | `1`, `1`     | Range of drift speeds in px per 1/60 s; each particle gets its own. Setting one past the other pulls it along.         |
+| `minRadius`, `maxRadius` | `0.5`, `1.5` | Range of particle radii in px; setting one past the other pulls it along. A max of `0` hides them; they still link.    |
 | `particleColor`          | `'#ffffff'`  |                                                                                                                        |
 | `linkDistance`           | `100`        | Particles closer than this many px are linked.                                                                         |
 | `falloff`                | `2`          | How fast a link fades with distance. Higher values fade sooner.                                                        |
@@ -148,6 +149,13 @@ Colors are hex strings like `'#4d7cff'`, which the panel's color pickers need.
 | `pointerLinks`           | `true`       | Links the pointer to nearby particles.                                                                                 |
 | `pointerTriangles`       | `false`      | Fills triangles between the pointer and pairs of linked particles.                                                     |
 | `spawnOnClick`           | `true`       | Pressing adds a particle, which follows the pointer until release.                                                     |
+| `spawnCount`             | `1`          | Particles a press adds. The rest scatter around the first and stay put.                                                |
+| `spawnSpread`            | `100`        | Radius in px of the disk those particles scatter over. Thousands in a small disk stall the first frames.               |
+| `autoSpawn`              | `false`      | While `spawnOnClick` is on too, adds particles at the pointer over the canvas, unless one already covers the spot.     |
+| `spawnRate`              | `10`         | Particles per second that `autoSpawn` adds, spread along the pointer's path.                                           |
+| `spawnOverlap`           | `false`      | Lets `autoSpawn` add particles on top of one already at the pointer, so a still pointer keeps adding them.             |
+| `spawnLifetime`          | `60000`      | Milliseconds an added particle lives, from when it's placed: auto-fired, scattered by a click, or let go after a drag. |
+| `deathDuration`          | `1000`       | Milliseconds such a particle then takes to fade out, along with its links and triangles.                               |
 | `flashlight`             | `true`       | Brightens links and triangles near the pointer.                                                                        |
 | `flashlightRadius`       | `200`        | Reach of the flashlight, in px.                                                                                        |
 | `flashlightBoost`        | `3`          | Opacity at the pointer is multiplied by 1 + this.                                                                      |
