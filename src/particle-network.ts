@@ -362,9 +362,8 @@ export class ParticleNetwork {
       this.pressed = [this.held];
       this.particles.push(this.held);
 
-      const { width, height, linkDistance: margin, density } = this;
-      // As dense as the network, so the extra particles don't all link at once
-      const radius = Math.sqrt((count * DENSITY_AREA) / (density * Math.PI));
+      const { width, height, linkDistance: margin } = this;
+      const radius = this.settings.spawnSpread;
       const now = performance.now();
       for (let i = 1; i < count; i++) {
         const angle = Math.random() * 2 * Math.PI;

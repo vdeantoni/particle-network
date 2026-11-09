@@ -11,7 +11,12 @@ const HISTORY_POINTS = 30;
 function addNumberField(
   folder: FolderApi,
   settings: Settings,
-  key: 'spawnCount' | 'spawnRate' | 'spawnLifetime' | 'deathDuration',
+  key:
+    | 'spawnCount'
+    | 'spawnSpread'
+    | 'spawnRate'
+    | 'spawnLifetime'
+    | 'deathDuration',
   label: string,
   keyScale: number,
 ) {
@@ -153,6 +158,7 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     label: 'click adds particle',
   });
   addNumberField(mouse, settings, 'spawnCount', 'particles per click', 1);
+  addNumberField(mouse, settings, 'spawnSpread', 'spread px', 10);
   mouse.addBinding(settings, 'autoSpawn', { label: 'auto-fire' });
   addNumberField(mouse, settings, 'spawnRate', 'fire rate /s', 1);
   mouse.addBinding(settings, 'spawnOverlap', { label: 'fire on same spot' });
