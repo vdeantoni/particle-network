@@ -24,9 +24,13 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
 
   const particles = pane.addFolder({ title: 'Particles' });
   particles.addBinding(settings, 'density', RANGES.density);
+  particles.addBinding(settings, 'minSpeed', {
+    ...RANGES.minSpeed,
+    label: 'min speed',
+  });
   particles.addBinding(settings, 'maxSpeed', {
     ...RANGES.maxSpeed,
-    label: 'speed',
+    label: 'max speed',
   });
   particles.addBinding(settings, 'minRadius', {
     ...RANGES.minRadius,

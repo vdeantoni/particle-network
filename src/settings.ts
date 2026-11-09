@@ -12,7 +12,8 @@ export type PointerForce = (typeof POINTER_FORCES)[number];
 export const DEFAULT_SETTINGS = {
   paused: false,
   density: 1,
-  maxSpeed: 0.15,
+  minSpeed: 1,
+  maxSpeed: 1,
   minRadius: 0.5,
   maxRadius: 1.5,
   particleColor: '#ffffff',
@@ -49,8 +50,9 @@ export const DEFAULT_SETTINGS = {
 export type Settings = typeof DEFAULT_SETTINGS;
 
 export const RANGES = {
-  density: { min: 0.1, max: 4, step: 0.1 },
-  maxSpeed: { min: 0, max: 1, step: 0.01 },
+  density: { min: 0.1, max: 10, step: 0.1 },
+  minSpeed: { min: 0, max: 10, step: 0.01 },
+  maxSpeed: { min: 0, max: 10, step: 0.01 },
   minRadius: { min: 0, max: 4, step: 0.1 },
   maxRadius: { min: 0, max: 4, step: 0.1 },
   linkDistance: { min: 40, max: 250, step: 5 },
