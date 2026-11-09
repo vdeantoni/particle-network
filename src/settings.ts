@@ -96,14 +96,16 @@ const BOOLEAN_KEYS = [
 ] as const;
 
 export function loadSettings(key: string): Partial<Settings> {
-  const settings: Partial<Settings> = {};
-
-  let stored: unknown;
   try {
-    stored = JSON.parse(localStorage.getItem(key) ?? '{}');
+    return parseSettings(JSON.parse(localStorage.getItem(key) ?? '{}'));
   } catch {
-    return settings;
+    return {};
   }
+}
+
+/** Keeps the valid settings in stored JSON, with numbers clamped to `RANGES`. */
+export function parseSettings(stored: unknown): Partial<Settings> {
+  const settings: Partial<Settings> = {};
   if (typeof stored !== 'object' || stored === null) {
     return settings;
   }
@@ -144,13 +146,22 @@ export function loadSettings(key: string): Partial<Settings> {
   return settings;
 }
 
+// Panel sliders round to their step counting from the value they started at,
+// so they can write 0.4 back as 0.39999999999999997
+export function same(a: unknown, b: unknown) {
+  return (
+    a === b ||
+    (typeof a === 'number' && typeof b === 'number' && Math.abs(a - b) < 1e-9)
+  );
+}
+
 export function saveSettings(key: string, settings: Settings, base: Settings) {
   // Only values that differ from the configured ones are saved, so later
   // changes to those still reach returning visitors. Paused never is.
   const changed = Object.fromEntries(
     Object.entries(settings).filter(
       ([name, value]) =>
-        name !== 'paused' && value !== base[name as keyof Settings],
+        name !== 'paused' && !same(value, base[name as keyof Settings]),
     ),
   );
   try {
