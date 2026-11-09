@@ -150,7 +150,7 @@ Colors are hex strings like `'#4d7cff'`, which the panel's color pickers need.
 | `pointerTriangles`       | `false`      | Fills triangles between the pointer and pairs of linked particles.                                                     |
 | `spawnOnClick`           | `true`       | Pressing adds a particle, which follows the pointer until release.                                                     |
 | `autoSpawn`              | `false`      | While `spawnOnClick` is on too, adds particles at the pointer over the canvas, unless one already covers the spot.     |
-| `spawnInterval`          | `100`        | Milliseconds between particles that `autoSpawn` adds.                                                                  |
+| `spawnRate`              | `10`         | Particles per second that `autoSpawn` adds, spread along the pointer's path.                                           |
 | `spawnOverlap`           | `false`      | Lets `autoSpawn` add particles on top of one already at the pointer, so a still pointer keeps adding them.             |
 | `spawnLifetime`          | `60000`      | Milliseconds a particle added by `autoSpawn` or a click lives, counted from when a drag lets go of it.                 |
 | `deathDuration`          | `1000`       | Milliseconds such a particle then takes to fade out, along with its links and triangles.                               |

@@ -145,8 +145,11 @@ export class ParticleNetwork {
   private hovered: EventTarget | null = null;
   // Added by the current press, and pinned to the pointer until release
   private held: Particle | null = null;
-  // Particles owed by autoSpawn, up to one
+  // Particles owed by autoSpawn, below one between frames
   private spawnDue = 0;
+  // Where the pointer was when auto-fire last ran, to spread particles along
+  // its path since
+  private lastFired: { x: number; y: number } | null = null;
   private reducedMotion: MediaQueryList | null;
   private observer: IntersectionObserver;
   private events = new AbortController();
@@ -462,31 +465,47 @@ export class ParticleNetwork {
     const {
       autoSpawn,
       spawnOnClick,
-      spawnInterval,
+      spawnRate,
       spawnOverlap,
       minRadius,
       maxRadius,
     } = this.settings;
-    if (!autoSpawn || !spawnOnClick || !pointer || isIgnored(this.hovered)) {
+    const previous = this.lastFired;
+    this.lastFired = null;
+    // Without overlap a dragged particle covers the pointer, so a drag adds
+    // nothing more, not even along the path behind it
+    if (
+      !autoSpawn ||
+      !spawnOnClick ||
+      !pointer ||
+      isIgnored(this.hovered) ||
+      (this.held && !spawnOverlap)
+    ) {
       return;
     }
+    this.lastFired = pointer;
+    const from = previous ?? pointer;
 
-    this.spawnDue += (delta * FRAME_MS) / spawnInterval;
+    // Capped like the push, so a long frame doesn't come out as a burst
+    this.spawnDue += (Math.min(delta, 4) * FRAME_MS * spawnRate) / 1000;
+    const count = Math.floor(this.spawnDue);
+    this.spawnDue -= count;
     // Closer than this, the new particle could overlap one already there
     const spacing = 2 * Math.max(minRadius, maxRadius);
-    if (
-      this.spawnDue >= 1 &&
-      (spawnOverlap ||
-        !particles.some((particle) => particle.distance(pointer) < spacing))
-    ) {
-      const particle = Particle.create(pointer.x, pointer.y);
-      particle.placedAt = performance.now();
-      particles.push(particle);
-      this.spawnDue -= 1;
+    // Spread along the pointer's path since the last frame, so a fast stroke
+    // leaves an even trail
+    for (let i = 1; i <= count; i++) {
+      const x = from.x + ((pointer.x - from.x) * i) / count;
+      const y = from.y + ((pointer.y - from.y) * i) / count;
+      if (
+        spawnOverlap ||
+        !particles.some((particle) => particle.distance({ x, y }) < spacing)
+      ) {
+        const particle = Particle.create(x, y);
+        particle.placedAt = performance.now();
+        particles.push(particle);
+      }
     }
-    // The remainder carries over, but time spent blocked or below one
-    // frame per particle doesn't come out later as a burst
-    this.spawnDue = Math.min(this.spawnDue, 1);
   }
 
   // Fades out particles the pointer placed once they outlive spawnLifetime,

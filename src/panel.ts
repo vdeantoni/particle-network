@@ -6,19 +6,20 @@ import type { ParticleNetwork } from './particle-network.js';
 // The particle total graph keeps 15 s at one point per 500 ms
 const HISTORY_POINTS = 30;
 
-// A number field for milliseconds up to a minute. A max would draw a slider,
-// too coarse below a second, so the field enforces it itself.
-function addDurationField(
+// A number field for a range too wide for a slider to set small values. A max
+// would draw a slider, so the field enforces it itself.
+function addNumberField(
   folder: FolderApi,
   settings: Settings,
-  key: 'spawnLifetime' | 'deathDuration',
+  key: 'spawnRate' | 'spawnLifetime' | 'deathDuration',
   label: string,
+  keyScale: number,
 ) {
   const { max, ...range } = RANGES[key];
   const field = folder.addBinding(settings, key, {
     ...range,
-    keyScale: 100,
-    pointerScale: 10,
+    keyScale,
+    pointerScale: keyScale / 10,
     label,
   });
   field.on('change', ({ value }) => {
@@ -152,13 +153,10 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     label: 'click adds particle',
   });
   mouse.addBinding(settings, 'autoSpawn', { label: 'auto-fire' });
-  mouse.addBinding(settings, 'spawnInterval', {
-    ...RANGES.spawnInterval,
-    label: 'fire every ms',
-  });
+  addNumberField(mouse, settings, 'spawnRate', 'fire rate /s', 1);
   mouse.addBinding(settings, 'spawnOverlap', { label: 'fire on same spot' });
-  addDurationField(mouse, settings, 'spawnLifetime', 'lifetime ms');
-  addDurationField(mouse, settings, 'deathDuration', 'fade out ms');
+  addNumberField(mouse, settings, 'spawnLifetime', 'lifetime ms', 100);
+  addNumberField(mouse, settings, 'deathDuration', 'fade out ms', 100);
 
   const flashlight = pane.addFolder({ title: 'Flashlight' });
   flashlight.addBinding(settings, 'flashlight', { label: 'on' });
