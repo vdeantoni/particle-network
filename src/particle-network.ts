@@ -301,11 +301,13 @@ export class ParticleNetwork {
 
   /** How many particles exist, and how many of them clicks and auto-fire added. */
   public count() {
-    const added = this.particles.filter(
-      (particle) => particle.placedAt !== undefined || particle === this.held,
-    ).length;
+    const added = this.particles.filter(this.isAdded).length;
     return { total: this.particles.length, added };
   }
+
+  // Clicks and auto-fire added it, so it leaves when its lifetime ends
+  private isAdded = (particle: Particle) =>
+    particle.placedAt !== undefined || particle === this.held;
 
   /** Stops the animation and removes its event listeners. */
   public destroy() {
@@ -424,18 +426,24 @@ export class ParticleNetwork {
     this.populate();
   }
 
+  // Tops up or trims the density's own particles; added ones stay until their
+  // lifetime ends
   private populate() {
-    const { width, height, linkDistance: margin, density } = this;
-    const population = Math.min(
-      MAX_PARTICLES,
-      Math.round(
-        ((width + 2 * margin) * (height + 2 * margin)) /
-          (DENSITY_AREA / density),
-      ),
+    const { width, height, linkDistance: margin, density, particles } = this;
+    const population = Math.round(
+      ((width + 2 * margin) * (height + 2 * margin)) / (DENSITY_AREA / density),
     );
-    this.particles.length = Math.min(this.particles.length, population);
-    while (this.particles.length < population) {
-      this.particles.push(
+    const own = particles.filter((particle) => !this.isAdded(particle));
+    if (own.length > population) {
+      const extra = new Set(own.slice(population));
+      this.remove((particle) => extra.has(particle));
+    }
+    for (
+      let i = own.length;
+      i < population && particles.length < MAX_PARTICLES;
+      i++
+    ) {
+      particles.push(
         Particle.create(
           Math.random() * (width + 2 * margin) - margin,
           Math.random() * (height + 2 * margin) - margin,
