@@ -2,6 +2,7 @@ export {
   ParticleNetwork,
   type ParticleNetworkOptions,
 } from './particle-network.js';
+export { BUILT_IN_PRESETS } from './presets.js';
 export {
   DEFAULT_SETTINGS,
   POINTER_FORCES,

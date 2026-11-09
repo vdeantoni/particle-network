@@ -46,6 +46,8 @@ The panel is built with [Tweakpane](https://tweakpane.github.io/docs/), which is
 
 The dropdown at the top of the panel switches between presets. Default is the page's own settings. The built-in Classic, Mosaic, Constellation, Web and Paint follow, then the visitor's own presets. Save as new saves the current settings under the name in the field. With one of the visitor's presets selected, Save overwrites it with the current settings and name, and Delete removes it. Built-in presets can't be changed, only saved as new ones. Revert changes goes back to the selected preset. With a `storageKey`, the presets and the selection are saved in localStorage under `<storageKey>-presets`; without one, they last until the page reloads.
 
+Built-in presets apply over the library's defaults, not the page's settings, so a page that turns off `background` or `spawnOnClick` gets them back from a built-in. To offer your own instead, pass `createPanel(network, container, { presets })`, where `presets` maps names to settings. The main entry exports `BUILT_IN_PRESETS` to extend or filter, and `{}` leaves only Default and the visitor's own.
+
 ### React
 
 ```tsx
@@ -88,12 +90,13 @@ export function Hero() {
 | `network`         |                        | The network to control. Until it exists the button shows but the panel doesn't open.                                                            |
 | `shortcut`        | `'h'`                  | Key that toggles the panel, compared with `KeyboardEvent.key` ignoring case. `null` turns it off. It's ignored while the user types in a field. |
 | `placement`       | `'above'`              | Opens the panel `'above'` or `'below'` the button, aligned to its right edge.                                                                   |
+| `presets`         | `BUILT_IN_PRESETS`     | Replaces the built-in presets. A new object rebuilds the panel, so define it outside the component.                                             |
 | `label`           | `'Animation settings'` | The button's accessible name and tooltip.                                                                                                       |
 | `className`       |                        | Positions the button. The panel is anchored to it.                                                                                              |
 | `buttonClassName` |                        | Styles the button in place of its built-in inline styles.                                                                                       |
 | `children`        | a sliders icon         | The button's content.                                                                                                                           |
 
-For a panel without the button, render `<ParticleNetworkPanel network={network} />` wherever you want it.
+For a panel without the button, render `<ParticleNetworkPanel network={network} />` wherever you want it. It takes `presets` too.
 
 ### Behind page content
 

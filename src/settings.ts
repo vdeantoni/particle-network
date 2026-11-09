@@ -146,13 +146,22 @@ export function parseSettings(stored: unknown): Partial<Settings> {
   return settings;
 }
 
+// Panel sliders round to their step counting from the value they started at,
+// so they can write 0.4 back as 0.39999999999999997
+export function same(a: unknown, b: unknown) {
+  return (
+    a === b ||
+    (typeof a === 'number' && typeof b === 'number' && Math.abs(a - b) < 1e-9)
+  );
+}
+
 export function saveSettings(key: string, settings: Settings, base: Settings) {
   // Only values that differ from the configured ones are saved, so later
   // changes to those still reach returning visitors. Paused never is.
   const changed = Object.fromEntries(
     Object.entries(settings).filter(
       ([name, value]) =>
-        name !== 'paused' && value !== base[name as keyof Settings],
+        name !== 'paused' && !same(value, base[name as keyof Settings]),
     ),
   );
   try {
