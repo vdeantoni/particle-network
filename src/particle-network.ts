@@ -34,6 +34,12 @@ function cellIndex(value: number, count: number, cellSize: number) {
   return Math.min(count - 1, Math.max(0, index));
 }
 
+// A min above the max counts as the max, so the max always caps
+function within(min: number, max: number, fraction: number) {
+  const low = Math.min(min, max);
+  return low + fraction * (max - low);
+}
+
 // Triangles are shaded by these levels too, so a dying particle's fills fade
 // with its lines
 function levelAt(
@@ -475,7 +481,7 @@ export class ParticleNetwork {
       const { minSpeed, maxSpeed } = settings;
       const pushDecay = PUSH_DECAY ** pushDelta;
       this.particles.forEach((particle) => {
-        const speed = minSpeed + particle.pace * (maxSpeed - minSpeed);
+        const speed = within(minSpeed, maxSpeed, particle.pace);
         particle.move(delta * speed, pushDelta, pushDecay);
         particle.x = wrap(particle.x, this.width, this.linkDistance);
         particle.y = wrap(particle.y, this.height, this.linkDistance);
@@ -500,14 +506,8 @@ export class ParticleNetwork {
 
   private spawnAtPointer(delta: number) {
     const { pointer, client, particles } = this;
-    const {
-      autoSpawn,
-      spawnOnClick,
-      spawnRate,
-      spawnOverlap,
-      minRadius,
-      maxRadius,
-    } = this.settings;
+    const { autoSpawn, spawnOnClick, spawnRate, spawnOverlap, maxRadius } =
+      this.settings;
     const previous = this.lastFired;
     this.lastFired = null;
     if (
@@ -530,7 +530,7 @@ export class ParticleNetwork {
     const count = Math.floor(this.spawnDue);
     this.spawnDue -= count;
     // Closer than this, the new particle could overlap one already there
-    const spacing = 2 * Math.max(minRadius, maxRadius);
+    const spacing = 2 * maxRadius;
     // Spread along the pointer's path since the last frame, so a fast stroke
     // leaves an even trail
     for (let i = 1; i <= count && particles.length < MAX_PARTICLES; i++) {
@@ -677,15 +677,14 @@ export class ParticleNetwork {
   private drawParticles() {
     const { ctx } = this;
     const { minRadius, maxRadius, particleColor } = this.settings;
-    const largest = Math.max(minRadius, maxRadius);
-    if (largest === 0) {
+    if (maxRadius === 0) {
       return;
     }
 
     ctx.fillStyle = particleColor;
     this.particles.forEach((particle) => {
-      const radius = minRadius + particle.size * (maxRadius - minRadius);
-      ctx.globalAlpha = (radius / largest) * particle.vitality;
+      const radius = within(minRadius, maxRadius, particle.size);
+      ctx.globalAlpha = (radius / maxRadius) * particle.vitality;
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, radius, 0, 2 * Math.PI);
       ctx.fill();
