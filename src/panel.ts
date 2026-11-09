@@ -119,6 +119,10 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
       lifetime.refresh();
     }
   });
+  mouse.addBinding(settings, 'deathDuration', {
+    ...RANGES.deathDuration,
+    label: 'fade out ms',
+  });
 
   const flashlight = pane.addFolder({ title: 'Flashlight' });
   flashlight.addBinding(settings, 'flashlight', { label: 'on' });
