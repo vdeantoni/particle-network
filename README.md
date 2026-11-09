@@ -152,7 +152,7 @@ Colors are hex strings like `'#4d7cff'`, which the panel's color pickers need.
 | `spawnInterval`          | `100`        | Milliseconds between particles that `autoSpawn` adds.                                                                  |
 | `spawnOverlap`           | `false`      | Lets `autoSpawn` add particles on top of one already at the pointer, so a still pointer keeps adding them.             |
 | `spawnLifetime`          | `60000`      | Milliseconds a particle added by `autoSpawn` or a click lives, counted from when a drag lets go of it.                 |
-| `deathDuration`          | `1000`       | Milliseconds such a particle takes to fade out at the end of its life, along with its links and triangles.             |
+| `deathDuration`          | `1000`       | Milliseconds such a particle then takes to fade out, along with its links and triangles.                               |
 | `flashlight`             | `true`       | Brightens links and triangles near the pointer.                                                                        |
 | `flashlightRadius`       | `200`        | Reach of the flashlight, in px.                                                                                        |
 | `flashlightBoost`        | `3`          | Opacity at the pointer is multiplied by 1 + this.                                                                      |
