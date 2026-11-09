@@ -423,10 +423,11 @@ export class ParticleNetwork {
       const pushDelta = Math.min(delta, 4);
       this.applyPointerForce(pushDelta);
 
-      const step = delta * settings.maxSpeed;
+      const { minSpeed, maxSpeed } = settings;
       const pushDecay = PUSH_DECAY ** pushDelta;
       this.particles.forEach((particle) => {
-        particle.move(step, pushDelta, pushDecay);
+        const speed = minSpeed + particle.pace * (maxSpeed - minSpeed);
+        particle.move(delta * speed, pushDelta, pushDecay);
         particle.x = wrap(particle.x, this.width, this.linkDistance);
         particle.y = wrap(particle.y, this.height, this.linkDistance);
       });
