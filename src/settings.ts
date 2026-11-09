@@ -56,7 +56,7 @@ export const RANGES = {
   minRadius: { min: 0, max: 4, step: 0.1 },
   maxRadius: { min: 0, max: 4, step: 0.1 },
   linkDistance: { min: 40, max: 250, step: 5 },
-  falloff: { min: 0.5, max: 4, step: 0.1 },
+  falloff: { min: 0.5, max: 10, step: 0.1 },
   lineWidth: { min: 0, max: 3, step: 0.05 },
   triangleOpacity: { min: 0, max: 1, step: 0.01 },
   triangleTransition: { min: 0, max: 2000, step: 50 },
