@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS = {
   spawnOnClick: true,
   autoSpawn: false,
   spawnInterval: 100,
+  spawnOverlap: false,
   spawnLifetime: 60000,
   flashlight: true,
   flashlightRadius: 200,
@@ -81,6 +82,7 @@ const BOOLEAN_KEYS = [
   'pointerTriangles',
   'spawnOnClick',
   'autoSpawn',
+  'spawnOverlap',
   'flashlight',
   'background',
 ] as const;

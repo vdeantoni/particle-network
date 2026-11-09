@@ -439,8 +439,14 @@ export class ParticleNetwork {
 
   private spawnAtPointer(delta: number) {
     const { pointer, particles } = this;
-    const { autoSpawn, spawnOnClick, spawnInterval, minRadius, maxRadius } =
-      this.settings;
+    const {
+      autoSpawn,
+      spawnOnClick,
+      spawnInterval,
+      spawnOverlap,
+      minRadius,
+      maxRadius,
+    } = this.settings;
     if (!autoSpawn || !spawnOnClick || !pointer || isIgnored(this.hovered)) {
       return;
     }
@@ -450,7 +456,8 @@ export class ParticleNetwork {
     const spacing = 2 * Math.max(minRadius, maxRadius);
     if (
       this.spawnDue >= 1 &&
-      !particles.some((particle) => particle.distance(pointer) < spacing)
+      (spawnOverlap ||
+        !particles.some((particle) => particle.distance(pointer) < spacing))
     ) {
       this.spawn(pointer.x, pointer.y);
       this.spawnDue -= 1;
