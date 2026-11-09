@@ -37,6 +37,7 @@ export const DEFAULT_SETTINGS = {
   spawnInterval: 100,
   spawnOverlap: false,
   spawnLifetime: 60000,
+  deathDuration: 1000,
   flashlight: true,
   flashlightRadius: 200,
   flashlightBoost: 3,
@@ -61,6 +62,7 @@ export const RANGES = {
   forceStrength: { min: 0, max: 0.5, step: 0.01 },
   spawnInterval: { min: 10, max: 1000, step: 10 },
   spawnLifetime: { min: 100, max: 60000, step: 10 },
+  deathDuration: { min: 0, max: 5000, step: 50 },
   flashlightRadius: { min: 50, max: 600, step: 10 },
   flashlightBoost: { min: 0, max: 10, step: 0.1 },
 } satisfies Partial<

@@ -7,8 +7,11 @@ export class Particle {
   // It decays so pushed particles settle back into their own drift.
   public pushX = 0;
   public pushY = 0;
-  // performance.now() when the pointer added it. Only those particles expire.
-  public spawnedAt?: number;
+  // performance.now() when the pointer placed it: when auto-fire added it, or
+  // when a drag let go of it. Only those particles expire.
+  public placedAt?: number;
+  // Falls from 1 to 0 as it dies, fading it along with its links
+  public vitality = 1;
 
   constructor(
     public x: number,

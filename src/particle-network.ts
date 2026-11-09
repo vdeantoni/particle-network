@@ -34,11 +34,20 @@ function cellIndex(value: number, count: number, cellSize: number) {
   return Math.min(count - 1, Math.max(0, index));
 }
 
-function levelAt(distance: number, maxDistance: number, falloff: number) {
+// Triangles are shaded by these levels too, so a dying particle's fills fade
+// with its lines
+function levelAt(
+  distance: number,
+  maxDistance: number,
+  falloff: number,
+  vitality: number,
+) {
   if (distance >= maxDistance) {
     return 0;
   }
-  return Math.round((1 - distance / maxDistance) ** falloff * ALPHA_LEVELS);
+  return Math.round(
+    (1 - distance / maxDistance) ** falloff * vitality * ALPHA_LEVELS,
+  );
 }
 
 function linkLevel(
@@ -47,7 +56,12 @@ function linkLevel(
   maxDistance: number,
   falloff: number,
 ) {
-  return levelAt(particle.distance(other), maxDistance, falloff);
+  return levelAt(
+    particle.distance(other),
+    maxDistance,
+    falloff,
+    Math.min(particle.vitality, other.vitality),
+  );
 }
 
 interface TriangleFade {
@@ -187,6 +201,9 @@ export class ParticleNetwork {
       this.client = null;
     };
     const release = () => {
+      if (this.held) {
+        this.held.placedAt = performance.now();
+      }
       this.held = null;
     };
     // The browser took the gesture over, usually to scroll, so the press
@@ -319,16 +336,10 @@ export class ParticleNetwork {
       position &&
       !isIgnored(event.target)
     ) {
-      this.held = this.spawn(position.x, position.y);
+      this.held = Particle.create(position.x, position.y);
+      this.particles.push(this.held);
     }
   };
-
-  private spawn(x: number, y: number) {
-    const particle = Particle.create(x, y);
-    particle.spawnedAt = performance.now();
-    this.particles.push(particle);
-    return particle;
-  }
 
   private fit() {
     const width = this.canvas.clientWidth;
@@ -459,7 +470,9 @@ export class ParticleNetwork {
       (spawnOverlap ||
         !particles.some((particle) => particle.distance(pointer) < spacing))
     ) {
-      this.spawn(pointer.x, pointer.y);
+      const particle = Particle.create(pointer.x, pointer.y);
+      particle.placedAt = performance.now();
+      particles.push(particle);
       this.spawnDue -= 1;
     }
     // The remainder carries over, but time spent blocked or below one
@@ -467,15 +480,22 @@ export class ParticleNetwork {
     this.spawnDue = Math.min(this.spawnDue, 1);
   }
 
-  // Removes particles the pointer added once they outlive spawnLifetime
+  // Fades out particles the pointer placed once they outlive spawnLifetime,
+  // then removes them
   private expire(now: number) {
-    const { particles, held } = this;
-    const lifetime = this.settings.spawnLifetime;
-    const expired = (particle: Particle) =>
-      particle.spawnedAt !== undefined &&
-      particle !== held &&
-      now - particle.spawnedAt >= lifetime;
-    if (!particles.some(expired)) {
+    const { particles } = this;
+    const { spawnLifetime, deathDuration } = this.settings;
+    let dead = false;
+    particles.forEach((particle) => {
+      if (particle.placedAt === undefined) {
+        return;
+      }
+      const dying = now - particle.placedAt - spawnLifetime;
+      particle.vitality =
+        dying <= 0 ? 1 : deathDuration > 0 ? 1 - dying / deathDuration : 0;
+      dead ||= particle.vitality <= 0;
+    });
+    if (!dead) {
       return;
     }
 
@@ -483,7 +503,7 @@ export class ParticleNetwork {
     const moved = new Int32Array(particles.length);
     let kept = 0;
     particles.forEach((particle, index) => {
-      if (expired(particle)) {
+      if (particle.vitality <= 0) {
         moved[index] = -1;
       } else {
         moved[index] = kept;
@@ -592,7 +612,7 @@ export class ParticleNetwork {
     ctx.fillStyle = particleColor;
     this.particles.forEach((particle) => {
       const radius = minRadius + particle.size * (maxRadius - minRadius);
-      ctx.globalAlpha = radius / largest;
+      ctx.globalAlpha = (radius / largest) * particle.vitality;
       ctx.beginPath();
       ctx.arc(particle.x, particle.y, radius, 0, 2 * Math.PI);
       ctx.fill();
@@ -663,6 +683,7 @@ export class ParticleNetwork {
           particle.distance(pointer),
           linkDistance,
           falloff,
+          particle.vitality,
         );
         if (level > 0) {
           linked.push({ index, level });
