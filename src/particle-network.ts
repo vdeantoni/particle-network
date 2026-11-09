@@ -439,33 +439,31 @@ export class ParticleNetwork {
 
   private spawnAtPointer(delta: number) {
     const { pointer, particles } = this;
-    const { autoSpawn, spawnOnClick, spawnRate, minRadius, maxRadius } =
+    const { autoSpawn, spawnOnClick, spawnInterval, minRadius, maxRadius } =
       this.settings;
     if (!autoSpawn || !spawnOnClick || !pointer || isIgnored(this.hovered)) {
       return;
     }
 
-    // Capped so time spent blocked doesn't come out later as a burst
-    this.spawnDue = Math.min(
-      1,
-      this.spawnDue + (delta * FRAME_MS * spawnRate) / 1000,
-    );
+    this.spawnDue += (delta * FRAME_MS) / spawnInterval;
     // Closer than this, the new particle could overlap one already there
     const spacing = 2 * Math.max(minRadius, maxRadius);
     if (
-      this.spawnDue < 1 ||
-      particles.some((particle) => particle.distance(pointer) < spacing)
+      this.spawnDue >= 1 &&
+      !particles.some((particle) => particle.distance(pointer) < spacing)
     ) {
-      return;
+      this.spawn(pointer.x, pointer.y);
+      this.spawnDue -= 1;
     }
-    this.spawn(pointer.x, pointer.y);
-    this.spawnDue -= 1;
+    // The remainder carries over, but time spent blocked or below one
+    // frame per particle doesn't come out later as a burst
+    this.spawnDue = Math.min(this.spawnDue, 1);
   }
 
   // Removes particles the pointer added once they outlive spawnLifetime
   private expire(now: number) {
     const { particles, held } = this;
-    const lifetime = this.settings.spawnLifetime * 1000;
+    const lifetime = this.settings.spawnLifetime;
     const expired = (particle: Particle) =>
       particle.spawnedAt !== undefined &&
       particle !== held &&
