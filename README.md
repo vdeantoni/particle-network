@@ -129,8 +129,8 @@ Colors are hex strings like `'#4d7cff'`, which the panel's color pickers need.
 | ------------------------ | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
 | `paused`                 | `false`      | Stops the particles. Links and pointer effects keep updating.                                                          |
 | `density`                | `1`          | Particles per 5,000 px² of canvas.                                                                                     |
-| `minSpeed`, `maxSpeed`   | `1`, `1`     | Range of drift speeds, in px per 1/60 s, each particle getting its own. The max caps them, even below the min.         |
-| `minRadius`, `maxRadius` | `0.5`, `1.5` | Range of particle radii, in px, capped by the max even below the min. A max of `0` hides them; they still link.        |
+| `minSpeed`, `maxSpeed`   | `1`, `1`     | Range of drift speeds in px per 1/60 s; each particle gets its own. Setting one past the other pulls it along.         |
+| `minRadius`, `maxRadius` | `0.5`, `1.5` | Range of particle radii in px; setting one past the other pulls it along. A max of `0` hides them; they still link.    |
 | `particleColor`          | `'#ffffff'`  |                                                                                                                        |
 | `linkDistance`           | `100`        | Particles closer than this many px are linked.                                                                         |
 | `falloff`                | `2`          | How fast a link fades with distance. Higher values fade sooner.                                                        |
