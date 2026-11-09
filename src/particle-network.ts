@@ -439,8 +439,9 @@ export class ParticleNetwork {
 
   private spawnAtPointer(delta: number) {
     const { pointer, particles } = this;
-    const { autoSpawn, spawnRate, minRadius, maxRadius } = this.settings;
-    if (!autoSpawn || !pointer || isIgnored(this.hovered)) {
+    const { autoSpawn, spawnOnClick, spawnRate, minRadius, maxRadius } =
+      this.settings;
+    if (!autoSpawn || !spawnOnClick || !pointer || isIgnored(this.hovered)) {
       return;
     }
 
