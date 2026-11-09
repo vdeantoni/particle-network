@@ -158,8 +158,9 @@ export interface ParticleNetworkOptions {
 export class ParticleNetwork {
   /** The live settings, read every frame. Change them with `set()`. */
   public readonly settings: Settings;
+  /** Where the settings are saved in localStorage, if anywhere. */
+  public readonly storageKey?: string;
   private base: Settings;
-  private storageKey?: string;
   private ctx: CanvasRenderingContext2D;
   private particles: Particle[] = [];
   private cells: number[][] = [];
@@ -294,6 +295,11 @@ export class ParticleNetwork {
     Object.assign(this.settings, pullRanges(values, this.settings));
     this.save();
     this.notify();
+  }
+
+  /** What `reset()` returns to: the options' settings, as `set()` changed them. */
+  public get defaults(): Settings {
+    return { ...this.base };
   }
 
   /** Drops changes made in the panel. */

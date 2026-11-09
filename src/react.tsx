@@ -104,6 +104,8 @@ export function ParticleNetworkCanvas({
 
 export interface ParticleNetworkPanelProps {
   network: ParticleNetwork;
+  /** Replaces the built-in presets. A new object rebuilds the panel, so define it outside the component. */
+  presets?: Record<string, Partial<Settings>>;
   className?: string;
   style?: CSSProperties;
 }
@@ -111,6 +113,7 @@ export interface ParticleNetworkPanelProps {
 /** The settings panel. Tweakpane loads when this first renders, so pages without it never download it. */
 export function ParticleNetworkPanel({
   network,
+  presets,
   className,
   style,
 }: ParticleNetworkPanelProps) {
@@ -121,14 +124,14 @@ export function ParticleNetworkPanel({
     let mounted = true;
     void import('./panel.js').then(({ createPanel }) => {
       if (mounted) {
-        panel = createPanel(network, container.current!);
+        panel = createPanel(network, container.current!, { presets });
       }
     });
     return () => {
       mounted = false;
       panel?.destroy();
     };
-  }, [network]);
+  }, [network, presets]);
 
   return <div ref={container} className={className} style={style} />;
 }
@@ -186,6 +189,8 @@ export interface ParticleNetworkSettingsProps {
   shortcut?: string | null;
   /** Where the panel opens relative to the button. */
   placement?: 'above' | 'below';
+  /** Replaces the built-in presets. A new object rebuilds the panel, so define it outside the component. */
+  presets?: Record<string, Partial<Settings>>;
   /** Accessible name and tooltip of the button. */
   label?: string;
   /** Positions the button, with the panel anchored to it. */
@@ -202,6 +207,7 @@ export function ParticleNetworkSettings({
   network,
   shortcut = 'h',
   placement = 'above',
+  presets,
   label = 'Animation settings',
   className,
   style,
@@ -267,7 +273,7 @@ export function ParticleNetworkSettings({
               overflowY: 'auto',
             }}
           >
-            <ParticleNetworkPanel network={network} />
+            <ParticleNetworkPanel network={network} presets={presets} />
           </div>
         )}
       </div>
