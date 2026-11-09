@@ -120,6 +120,27 @@ function definedValues(settings: Partial<Settings>) {
   ) as Partial<Settings>;
 }
 
+const RANGE_ENDS = [
+  ['minSpeed', 'maxSpeed'],
+  ['minRadius', 'maxRadius'],
+] as const;
+
+// One end set past the other pulls it along, as the panel does, so the end
+// that was set takes effect instead of being capped by within()
+function pullRanges(values: Partial<Settings>, current: Settings) {
+  const pulled = { ...values };
+  for (const [low, high] of RANGE_ENDS) {
+    const min = values[low];
+    const max = values[high];
+    if (min !== undefined && max === undefined && min > current[high]) {
+      pulled[high] = min;
+    } else if (max !== undefined && min === undefined && max < current[low]) {
+      pulled[low] = max;
+    }
+  }
+  return pulled;
+}
+
 export interface ParticleNetworkOptions {
   /** Merged over `DEFAULT_SETTINGS`; `reset()` returns to these. */
   settings?: Partial<Settings>;
@@ -191,11 +212,11 @@ export class ParticleNetwork {
     this.ctx = canvas.getContext('2d')!;
     this.base = {
       ...DEFAULT_SETTINGS,
-      ...definedValues(options.settings ?? {}),
+      ...pullRanges(definedValues(options.settings ?? {}), DEFAULT_SETTINGS),
     };
     this.storageKey = storageKey;
     const stored = storageKey ? loadSettings(storageKey) : {};
-    this.settings = { ...this.base, ...stored };
+    this.settings = { ...this.base, ...pullRanges(stored, this.base) };
     this.reducedMotion = respectReducedMotion
       ? window.matchMedia('(prefers-reduced-motion: reduce)')
       : null;
@@ -269,8 +290,8 @@ export class ParticleNetwork {
   /** Changes settings and makes them what `reset()` returns to. */
   public set(settings: Partial<Settings>) {
     const values = definedValues(settings);
-    Object.assign(this.base, values);
-    Object.assign(this.settings, values);
+    Object.assign(this.base, pullRanges(values, this.base));
+    Object.assign(this.settings, pullRanges(values, this.settings));
     this.save();
     this.notify();
   }
