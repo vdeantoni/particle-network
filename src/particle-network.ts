@@ -591,7 +591,10 @@ export class ParticleNetwork {
       const b = moved[fade.b];
       const c = fade.c === POINTER_INDEX ? POINTER_INDEX : moved[fade.c];
       if (a >= 0 && b >= 0 && c >= 0) {
-        fades.set(triangleKey(a, b, c), { ...fade, a, b, c });
+        fade.a = a;
+        fade.b = b;
+        fade.c = c;
+        fades.set(triangleKey(a, b, c), fade);
       }
     });
     this.fades = fades;
