@@ -33,6 +33,8 @@ export const DEFAULT_SETTINGS = {
   pointerLinks: true,
   pointerTriangles: false,
   spawnOnClick: true,
+  autoSpawn: false,
+  spawnRate: 10,
   flashlight: true,
   flashlightRadius: 200,
   flashlightBoost: 3,
@@ -55,6 +57,7 @@ export const RANGES = {
   triangleTransition: { min: 0, max: 2000, step: 50 },
   forceRadius: { min: 50, max: 500, step: 10 },
   forceStrength: { min: 0, max: 0.5, step: 0.01 },
+  spawnRate: { min: 1, max: 60, step: 1 },
   flashlightRadius: { min: 50, max: 600, step: 10 },
   flashlightBoost: { min: 0, max: 10, step: 0.1 },
 } satisfies Partial<
@@ -75,6 +78,7 @@ const BOOLEAN_KEYS = [
   'pointerLinks',
   'pointerTriangles',
   'spawnOnClick',
+  'autoSpawn',
   'flashlight',
   'background',
 ] as const;
