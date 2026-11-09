@@ -37,6 +37,36 @@ function addNumberField(
   return field;
 }
 
+// The network caps at the max, so a min dragged above it would do nothing.
+// Dragging either end past the other pulls the other along instead.
+function addRange(
+  folder: FolderApi,
+  settings: Settings,
+  [minKey, maxKey]: ['minSpeed', 'maxSpeed'] | ['minRadius', 'maxRadius'],
+  name: string,
+) {
+  const low = folder.addBinding(settings, minKey, {
+    ...RANGES[minKey],
+    label: `min ${name}`,
+  });
+  const high = folder.addBinding(settings, maxKey, {
+    ...RANGES[maxKey],
+    label: `max ${name}`,
+  });
+  low.on('change', ({ value }) => {
+    if (value > settings[maxKey]) {
+      settings[maxKey] = value;
+      high.refresh();
+    }
+  });
+  high.on('change', ({ value }) => {
+    if (value < settings[minKey]) {
+      settings[minKey] = value;
+      low.refresh();
+    }
+  });
+}
+
 /** Builds the Tweakpane controls for `network` inside `container`. */
 export function createPanel(network: ParticleNetwork, container: HTMLElement) {
   const { settings } = network;
@@ -58,22 +88,8 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
 
   const particles = pane.addFolder({ title: 'Particles' });
   particles.addBinding(settings, 'density', RANGES.density);
-  particles.addBinding(settings, 'minSpeed', {
-    ...RANGES.minSpeed,
-    label: 'min speed',
-  });
-  particles.addBinding(settings, 'maxSpeed', {
-    ...RANGES.maxSpeed,
-    label: 'max speed',
-  });
-  particles.addBinding(settings, 'minRadius', {
-    ...RANGES.minRadius,
-    label: 'min radius',
-  });
-  particles.addBinding(settings, 'maxRadius', {
-    ...RANGES.maxRadius,
-    label: 'max radius',
-  });
+  addRange(particles, settings, ['minSpeed', 'maxSpeed'], 'speed');
+  addRange(particles, settings, ['minRadius', 'maxRadius'], 'radius');
   particles.addBinding(settings, 'particleColor', { label: 'color' });
 
   const links = pane.addFolder({ title: 'Links' });
