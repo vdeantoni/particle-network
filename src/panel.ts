@@ -104,6 +104,7 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     ...RANGES.spawnInterval,
     label: 'fire every ms',
   });
+  mouse.addBinding(settings, 'spawnOverlap', { label: 'fire on same spot' });
   // A max would draw a slider, too coarse below a second, so it's enforced here
   const { max: maxLifetime, ...lifetimeRange } = RANGES.spawnLifetime;
   const lifetime = mouse.addBinding(settings, 'spawnLifetime', {

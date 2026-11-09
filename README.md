@@ -150,6 +150,7 @@ Colors are hex strings like `'#4d7cff'`, which the panel's color pickers need.
 | `spawnOnClick`           | `true`       | Pressing adds a particle, which follows the pointer until release.                                                     |
 | `autoSpawn`              | `false`      | While `spawnOnClick` is on too, adds particles at the pointer over the canvas, unless one already covers the spot.     |
 | `spawnInterval`          | `100`        | Milliseconds between particles that `autoSpawn` adds.                                                                  |
+| `spawnOverlap`           | `false`      | Lets `autoSpawn` add particles on top of one already at the pointer, so a still pointer keeps adding them.             |
 | `spawnLifetime`          | `60000`      | Milliseconds before a particle added by a click or `autoSpawn` is removed.                                             |
 | `flashlight`             | `true`       | Brightens links and triangles near the pointer.                                                                        |
 | `flashlightRadius`       | `200`        | Reach of the flashlight, in px.                                                                                        |
