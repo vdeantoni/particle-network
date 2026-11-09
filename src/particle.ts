@@ -7,6 +7,8 @@ export class Particle {
   // It decays so pushed particles settle back into their own drift.
   public pushX = 0;
   public pushY = 0;
+  // performance.now() when the pointer added it. Only those particles expire.
+  public spawnedAt?: number;
 
   constructor(
     public x: number,

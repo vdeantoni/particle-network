@@ -35,6 +35,7 @@ export const DEFAULT_SETTINGS = {
   spawnOnClick: true,
   autoSpawn: false,
   spawnRate: 10,
+  spawnLifetime: 60,
   flashlight: true,
   flashlightRadius: 200,
   flashlightBoost: 3,
@@ -58,6 +59,7 @@ export const RANGES = {
   forceRadius: { min: 50, max: 500, step: 10 },
   forceStrength: { min: 0, max: 0.5, step: 0.01 },
   spawnRate: { min: 1, max: 60, step: 1 },
+  spawnLifetime: { min: 1, max: 300, step: 1 },
   flashlightRadius: { min: 50, max: 600, step: 10 },
   flashlightBoost: { min: 0, max: 10, step: 0.1 },
 } satisfies Partial<
