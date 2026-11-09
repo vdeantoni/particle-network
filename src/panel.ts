@@ -104,6 +104,10 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     ...RANGES.spawnRate,
     label: 'fire rate /s',
   });
+  mouse.addBinding(settings, 'spawnLifetime', {
+    ...RANGES.spawnLifetime,
+    label: 'lifetime s',
+  });
 
   const flashlight = pane.addFolder({ title: 'Flashlight' });
   flashlight.addBinding(settings, 'flashlight', { label: 'on' });

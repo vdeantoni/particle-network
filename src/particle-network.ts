@@ -72,6 +72,10 @@ const INDEX_LIMIT = 2 ** 17;
 // Stands in for the pointer as a triangle vertex; no particle index reaches it
 const POINTER_INDEX = INDEX_LIMIT - 1;
 
+function triangleKey(a: number, b: number, c: number) {
+  return (a * INDEX_LIMIT + b) * INDEX_LIMIT + c;
+}
+
 interface PointerLink {
   index: number;
   level: number;
@@ -315,10 +319,16 @@ export class ParticleNetwork {
       position &&
       !isIgnored(event.target)
     ) {
-      this.held = Particle.create(position.x, position.y);
-      this.particles.push(this.held);
+      this.held = this.spawn(position.x, position.y);
     }
   };
+
+  private spawn(x: number, y: number) {
+    const particle = Particle.create(x, y);
+    particle.spawnedAt = performance.now();
+    this.particles.push(particle);
+    return particle;
+  }
 
   private fit() {
     const width = this.canvas.clientWidth;
@@ -389,6 +399,7 @@ export class ParticleNetwork {
     const { ctx, settings, client } = this;
 
     this.fit();
+    this.expire(timestamp);
     this.pointer = client && this.toCanvas(client.x, client.y);
 
     ctx.globalCompositeOperation = 'source-over';
@@ -446,8 +457,46 @@ export class ParticleNetwork {
     ) {
       return;
     }
-    particles.push(Particle.create(pointer.x, pointer.y));
+    this.spawn(pointer.x, pointer.y);
     this.spawnDue -= 1;
+  }
+
+  // Removes particles the pointer added once they outlive spawnLifetime
+  private expire(now: number) {
+    const { particles, held } = this;
+    const lifetime = this.settings.spawnLifetime * 1000;
+    const expired = (particle: Particle) =>
+      particle.spawnedAt !== undefined &&
+      particle !== held &&
+      now - particle.spawnedAt >= lifetime;
+    if (!particles.some(expired)) {
+      return;
+    }
+
+    // Each particle's new index, or -1 once removed
+    const moved = new Int32Array(particles.length);
+    let kept = 0;
+    particles.forEach((particle, index) => {
+      if (expired(particle)) {
+        moved[index] = -1;
+      } else {
+        moved[index] = kept;
+        particles[kept++] = particle;
+      }
+    });
+    particles.length = kept;
+
+    // Fades are keyed by index, and later particles just moved down
+    const fades = new Map<number, TriangleFade>();
+    this.fades.forEach((fade) => {
+      const a = moved[fade.a];
+      const b = moved[fade.b];
+      const c = fade.c === POINTER_INDEX ? POINTER_INDEX : moved[fade.c];
+      if (a >= 0 && b >= 0 && c >= 0) {
+        fades.set(triangleKey(a, b, c), { ...fade, a, b, c });
+      }
+    });
+    this.fades = fades;
   }
 
   private applyPointerForce(delta: number) {
@@ -697,7 +746,7 @@ export class ParticleNetwork {
     const show: TriangleVisitor = (a, b, c, ab, bc, ac) => {
       const level =
         triangleShade === 'weakest' ? Math.min(ab, bc, ac) : (ab + bc + ac) / 3;
-      const key = (a * INDEX_LIMIT + b) * INDEX_LIMIT + c;
+      const key = triangleKey(a, b, c);
       let fade = fades.get(key);
       if (!fade) {
         fade = { a, b, c, opacity: 0, frame };
