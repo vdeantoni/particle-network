@@ -149,6 +149,7 @@ Colors are hex strings like `'#4d7cff'`, which the panel's color pickers need.
 | `pointerLinks`           | `true`       | Links the pointer to nearby particles.                                                                                 |
 | `pointerTriangles`       | `false`      | Fills triangles between the pointer and pairs of linked particles.                                                     |
 | `spawnOnClick`           | `true`       | Pressing adds a particle, which follows the pointer until release.                                                     |
+| `spawnCount`             | `1`          | Particles a press adds. The rest scatter around the first as densely as the network, and stay put.                     |
 | `autoSpawn`              | `false`      | While `spawnOnClick` is on too, adds particles at the pointer over the canvas, unless one already covers the spot.     |
 | `spawnRate`              | `10`         | Particles per second that `autoSpawn` adds, spread along the pointer's path.                                           |
 | `spawnOverlap`           | `false`      | Lets `autoSpawn` add particles on top of one already at the pointer, so a still pointer keeps adding them.             |

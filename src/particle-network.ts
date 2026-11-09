@@ -85,6 +85,10 @@ type TriangleVisitor = (
 const INDEX_LIMIT = 2 ** 17;
 // Stands in for the pointer as a triangle vertex; no particle index reaches it
 const POINTER_INDEX = INDEX_LIMIT - 1;
+// The list never grows past POINTER_INDEX, so every index stays below it
+const MAX_PARTICLES = POINTER_INDEX;
+// Density counts particles per this many px²
+const DENSITY_AREA = 5000;
 
 function triangleKey(a: number, b: number, c: number) {
   return (a * INDEX_LIMIT + b) * INDEX_LIMIT + c;
@@ -145,6 +149,8 @@ export class ParticleNetwork {
   private hovered: EventTarget | null = null;
   // Added by the current press, and pinned to the pointer until release
   private held: Particle | null = null;
+  // Everything the current press added, which a pointercancel takes back
+  private pressed: Particle[] = [];
   // Particles owed by autoSpawn, below one between frames
   private spawnDue = 0;
   // Where the pointer was when auto-fire last ran, to spread particles along
@@ -208,16 +214,16 @@ export class ParticleNetwork {
         this.held.placedAt = performance.now();
       }
       this.held = null;
+      this.pressed = [];
     };
     // The browser took the gesture over, usually to scroll, so the press
-    // wasn't meant to add a particle
+    // wasn't meant to add particles
     const cancel = () => {
       this.client = null;
-      const index = this.held ? this.particles.indexOf(this.held) : -1;
-      if (index >= 0) {
-        this.particles.splice(index, 1);
-      }
+      const pressed = new Set(this.pressed);
+      this.remove((particle) => pressed.has(particle));
       this.held = null;
+      this.pressed = [];
     };
     target.addEventListener('pointermove', track, { signal });
     target.addEventListener('pointerdown', this.press, { signal });
@@ -340,15 +346,37 @@ export class ParticleNetwork {
     this.client = { x: event.clientX, y: event.clientY };
     this.hovered = event.target;
     const position = this.toCanvas(event.clientX, event.clientY);
+    const count = Math.min(
+      this.settings.spawnCount,
+      MAX_PARTICLES - this.particles.length,
+    );
     if (
       this.settings.spawnOnClick &&
       event.isPrimary &&
       event.button === 0 &&
       position &&
-      !isIgnored(event.target)
+      !isIgnored(event.target) &&
+      count > 0
     ) {
       this.held = Particle.create(position.x, position.y);
+      this.pressed = [this.held];
       this.particles.push(this.held);
+
+      const { width, height, linkDistance: margin, density } = this;
+      // As dense as the network, so the extra particles don't all link at once
+      const radius = Math.sqrt((count * DENSITY_AREA) / (density * Math.PI));
+      const now = performance.now();
+      for (let i = 1; i < count; i++) {
+        const angle = Math.random() * 2 * Math.PI;
+        const distance = radius * Math.sqrt(Math.random());
+        const particle = Particle.create(
+          wrap(position.x + distance * Math.cos(angle), width, margin),
+          wrap(position.y + distance * Math.sin(angle), height, margin),
+        );
+        particle.placedAt = now;
+        this.pressed.push(particle);
+        this.particles.push(particle);
+      }
     }
   };
 
@@ -397,8 +425,12 @@ export class ParticleNetwork {
 
   private populate() {
     const { width, height, linkDistance: margin, density } = this;
-    const population = Math.round(
-      ((width + 2 * margin) * (height + 2 * margin)) / (5000 / density),
+    const population = Math.min(
+      MAX_PARTICLES,
+      Math.round(
+        ((width + 2 * margin) * (height + 2 * margin)) /
+          (DENSITY_AREA / density),
+      ),
     );
     this.particles.length = Math.min(this.particles.length, population);
     while (this.particles.length < population) {
@@ -494,7 +526,7 @@ export class ParticleNetwork {
     const spacing = 2 * Math.max(minRadius, maxRadius);
     // Spread along the pointer's path since the last frame, so a fast stroke
     // leaves an even trail
-    for (let i = 1; i <= count; i++) {
+    for (let i = 1; i <= count && particles.length < MAX_PARTICLES; i++) {
       const x = from.x + ((pointer.x - from.x) * i) / count;
       const y = from.y + ((pointer.y - from.y) * i) / count;
       if (
@@ -523,15 +555,19 @@ export class ParticleNetwork {
         dying <= 0 ? 1 : deathDuration > 0 ? 1 - dying / deathDuration : 0;
       dead ||= particle.vitality <= 0;
     });
-    if (!dead) {
-      return;
+    if (dead) {
+      this.remove((particle) => particle.vitality <= 0);
     }
+  }
 
+  // Fades are keyed by index, so they move down past each removed particle
+  private remove(removed: (particle: Particle) => boolean) {
+    const { particles } = this;
     // Each particle's new index, or -1 once removed
     const moved = new Int32Array(particles.length);
     let kept = 0;
     particles.forEach((particle, index) => {
-      if (particle.vitality <= 0) {
+      if (removed(particle)) {
         moved[index] = -1;
       } else {
         moved[index] = kept;
@@ -540,7 +576,6 @@ export class ParticleNetwork {
     });
     particles.length = kept;
 
-    // Fades are keyed by index, and later particles just moved down
     const fades = new Map<number, TriangleFade>();
     this.fades.forEach((fade) => {
       const a = moved[fade.a];
