@@ -290,6 +290,14 @@ export class ParticleNetwork {
     this.populate();
   }
 
+  /** How many particles exist, and how many of them clicks and auto-fire added. */
+  public count() {
+    const added = this.particles.filter(
+      (particle) => particle.placedAt !== undefined || particle === this.held,
+    ).length;
+    return { total: this.particles.length, added };
+  }
+
   /** Stops the animation and removes its event listeners. */
   public destroy() {
     window.cancelAnimationFrame(this.frameRequest);

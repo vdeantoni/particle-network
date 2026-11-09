@@ -31,7 +31,7 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
   // Dragging a slider over the canvas would otherwise add a particle
   container.setAttribute('data-particle-network-ignore', '');
   const pane = new Pane({ title: 'Controls', container });
-  const stats = { fps: 0 };
+  const stats = { fps: 0, total: 0, fromDensity: 0, fromMouse: 0 };
 
   const simulation = pane.addFolder({ title: 'Simulation' });
   simulation.addBinding(settings, 'paused');
@@ -44,6 +44,15 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     min: 0,
     max: 150,
   });
+
+  const count = pane.addFolder({ title: 'Particle count' });
+  const whole = { readonly: true, format: (value: number) => value.toFixed(0) };
+  const monitors = new Set<unknown>([
+    fps,
+    count.addBinding(stats, 'total', whole),
+    count.addBinding(stats, 'fromDensity', { ...whole, label: 'from density' }),
+    count.addBinding(stats, 'fromMouse', { ...whole, label: 'from mouse' }),
+  ]);
 
   const particles = pane.addFolder({ title: 'Particles' });
   particles.addBinding(settings, 'density', RANGES.density);
@@ -157,7 +166,7 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
 
   pane.on('change', (event) => {
     // Monitors emit change on every poll, not only on user input
-    if (event.target !== fps && event.last) {
+    if (!monitors.has(event.target) && event.last) {
       network.save();
     }
   });
@@ -170,6 +179,10 @@ export function createPanel(network: ParticleNetwork, container: HTMLElement) {
     frames++;
     if (now - since >= 500) {
       stats.fps = Math.round((frames * 1000) / (now - since));
+      const { total, added } = network.count();
+      stats.total = total;
+      stats.fromDensity = total - added;
+      stats.fromMouse = added;
       frames = 0;
       since = now;
     }
