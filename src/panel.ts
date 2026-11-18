@@ -129,32 +129,56 @@ export function createPanel(
   const presetsKey = network.storageKey && `${network.storageKey}-presets`;
   const stored = presetsKey ? loadPresets(presetsKey) : { presets: [] };
   let saved = stored.presets;
-  const choices = (): PresetChoice[] => [
-    {
-      key: DEFAULT_PRESET,
-      name: 'Default',
-      builtIn: true,
-      values: network.defaults,
-    },
-    ...Object.entries(builtIns).map(([name, values]) => ({
-      key: `built-in:${name}`,
-      name,
-      builtIn: true,
-      values: { ...DEFAULT_SETTINGS, ...values },
-    })),
-    ...saved.map(({ name, settings }) => ({
-      key: savedKey(name),
-      name,
-      builtIn: false,
-      values: { ...DEFAULT_SETTINGS, ...settings },
-    })),
-  ];
+  const sameValues = (a: Settings, b: Settings) =>
+    PRESET_KEYS.every((key) => same(a[key], b[key]));
+  const choices = (): PresetChoice[] => {
+    const defaults = network.defaults;
+    return [
+      {
+        key: DEFAULT_PRESET,
+        name: 'Default',
+        builtIn: true,
+        values: defaults,
+      },
+      ...Object.entries(builtIns)
+        .map(([name, values]) => ({
+          key: `built-in:${name}`,
+          name,
+          builtIn: true,
+          values: { ...DEFAULT_SETTINGS, ...values },
+        }))
+        // Drops a built-in that looks like Default; set() can change which
+        .filter((choice) => !sameValues(choice.values, defaults)),
+      ...saved.map(({ name, settings }) => ({
+        key: savedKey(name),
+        name,
+        builtIn: false,
+        values: { ...DEFAULT_SETTINGS, ...settings },
+      })),
+    ];
+  };
   const exists = (key?: string) =>
     choices().some((choice) => choice.key === key);
   let selected = exists(stored.selected) ? stored.selected! : DEFAULT_PRESET;
   const current = () => choices().find((choice) => choice.key === selected)!;
   const isModified = (choice: PresetChoice) =>
-    PRESET_KEYS.some((key) => !same(settings[key], choice.values[key]));
+    !sameValues(settings, choice.values);
+  const unusedName = (name: string, ownKey?: string) => {
+    const names = new Set(
+      choices()
+        .filter((choice) => choice.key !== ownKey)
+        .map((choice) => choice.name),
+    );
+    if (!names.has(name)) {
+      return name;
+    }
+    const [, stem, number] = /^(.*?)(?: (\d+))?$/.exec(name)!;
+    let next = Number(number ?? 1) + 1;
+    while (names.has(`${stem} ${next}`)) {
+      next++;
+    }
+    return `${stem} ${next}`;
+  };
   const store = (change = (presets: SavedPreset[]) => presets) => {
     saved = change(saved);
     if (presetsKey) {
@@ -349,6 +373,10 @@ export function createPanel(
   };
   const syncPresets = () => {
     const all = choices();
+    // Another tab can delete the selection, and set() can make it match Default
+    if (!all.some((choice) => choice.key === selected)) {
+      selected = DEFAULT_PRESET;
+    }
     const chosen = all.find((choice) => choice.key === selected)!;
     const modified = isModified(chosen);
     presetList.options = all.map(({ key, name }) => ({
@@ -358,16 +386,11 @@ export function createPanel(
     presetList.value = selected;
 
     const name = typedName();
-    const taken = all.some(
-      (choice) => choice.name === name && choice !== chosen,
-    );
-    saveButton.disabled =
-      chosen.builtIn ||
-      name === '' ||
-      taken ||
-      (!modified && name === chosen.name);
-    saveNewButton.disabled = name === '' || taken || name === chosen.name;
-    deleteButton.disabled = chosen.builtIn;
+    const nothingToSave = name === '' || (!modified && name === chosen.name);
+    saveButton.hidden = chosen.builtIn;
+    saveButton.disabled = nothingToSave;
+    saveNewButton.disabled = nothingToSave;
+    deleteButton.hidden = chosen.builtIn;
     revertButton.disabled = !modified;
   };
   const apply = (values: Settings) => {
@@ -391,7 +414,10 @@ export function createPanel(
   nameInput.addEventListener('input', syncPresets);
   saveButton.on('click', () => {
     const previous = current().name;
-    const preset = { name: typedName(), settings: presetValues(settings) };
+    const preset = {
+      name: unusedName(typedName(), selected),
+      settings: presetValues(settings),
+    };
     selected = savedKey(preset.name);
     store((presets) =>
       presets.map((other) => (other.name === previous ? preset : other)),
@@ -400,7 +426,10 @@ export function createPanel(
     syncPresets();
   });
   saveNewButton.on('click', () => {
-    const preset = { name: typedName(), settings: presetValues(settings) };
+    const preset = {
+      name: unusedName(typedName()),
+      settings: presetValues(settings),
+    };
     selected = savedKey(preset.name);
     store((presets) => [...presets, preset]);
     nameField.value = preset.name;
@@ -421,9 +450,6 @@ export function createPanel(
   const reload = (event: StorageEvent) => {
     if (presetsKey && event.key === presetsKey) {
       saved = loadPresets(presetsKey).presets;
-      if (!exists(selected)) {
-        selected = DEFAULT_PRESET;
-      }
       syncPresets();
     }
   };
